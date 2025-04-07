@@ -73,7 +73,7 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Total upcoming activities: {len(activities)}\n"
         f"Activities within next 2 days: {len(upcoming)}\n"
         f"Pending reminders: {len(pending_reminders)}\n"
-        f"Next check in: < 5 minutes"
+        f"Next check in: < 10 seconds"
     )
 
     await update.message.reply_text(status)
@@ -92,7 +92,7 @@ async def run_bot():
     scheduler = AsyncIOScheduler()
     scheduler.add_job(
         process_events,
-        IntervalTrigger(minutes=5),
+        IntervalTrigger(seconds=10),
         id="check_events",
         name="Check for upcoming activities",
     )

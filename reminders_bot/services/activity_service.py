@@ -149,10 +149,10 @@ async def mark_reminder_sent(activity_id):
     url = f"{API_BASE_URL}/activities/{activity_id}/mark_reminder_sent"
     async with aiohttp.ClientSession() as session:
         try:
-            async with session.post(url) as response:
+            async with session.patch(url) as response:
                 if response.status == 200:
                     logger.info(f"Marked activity {activity_id} as reminder_sent")
-                else:
-                    logger.warning(f"Failed to mark reminder sent for {activity_id}")
+
         except Exception as e:
+            logger.warning(f"Failed to mark reminder sent for {activity_id}")
             logger.error(f"Error marking reminder as sent: {e}")
