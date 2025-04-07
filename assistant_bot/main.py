@@ -35,7 +35,7 @@ async def start_assistant_bot():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("residents", list_residents))
 
-    print("Assittant Bot is polling... 🎯")
+    print("Assistant Bot is polling... 🎯")
     await app.run_polling()
 
 
