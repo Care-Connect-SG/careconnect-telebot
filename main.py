@@ -5,6 +5,7 @@ import signal
 
 processes = []
 
+
 def run_bot(module_path):
     """Run a bot module as a separate process"""
     print(f"Starting {module_path}...")
@@ -16,11 +17,12 @@ def run_bot(module_path):
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
-        bufsize=1
+        bufsize=1,
     )
 
     processes.append(process)
     return process
+
 
 def signal_handler(sig, frame):
     """Handle Ctrl+C and other termination signals"""
@@ -37,6 +39,7 @@ def signal_handler(sig, frame):
 
     print("All bots stopped")
     sys.exit(0)
+
 
 def main():
     signal.signal(signal.SIGINT, signal_handler)
@@ -71,6 +74,7 @@ def main():
             pass
 
         time.sleep(0.1)
+
 
 if __name__ == "__main__":
     main()

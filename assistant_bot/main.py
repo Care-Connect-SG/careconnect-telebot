@@ -1,19 +1,25 @@
 import logging
 from motor.motor_asyncio import AsyncIOMotorClient
 from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
 
 from config import ASSISTANT_BOT_TOKEN, MONGO_URI
 
 logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
 mongo_client = AsyncIOMotorClient(MONGO_URI)
 db = mongo_client["resident"]
 resident_collection = db["resident_info"]
+
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -22,6 +28,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Hello {user.first_name}! I'm your assistant bot. "
         f"Use /residents to see the list of residents."
     )
+
 
 async def list_residents(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """List all residents from MongoDB"""
@@ -44,7 +51,10 @@ async def list_residents(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"Sent list of {len(residents)} residents")
     except Exception as e:
         logger.error(f"Error retrieving residents: {e}")
-        await update.message.reply_text("Sorry, I couldn't retrieve the resident list. Please try again later.")
+        await update.message.reply_text(
+            "Sorry, I couldn't retrieve the resident list. Please try again later."
+        )
+
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Send a message when the command /help is issued."""
@@ -56,9 +66,11 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(help_text)
 
+
 async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle unknown commands."""
     await update.message.reply_text("Sorry, I didn't understand that command.")
+
 
 def main():
     application = Application.builder().token(ASSISTANT_BOT_TOKEN).build()
@@ -72,6 +84,7 @@ def main():
     logger.info("Starting Assistant Bot...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
     logger.info("Assistant Bot stopped")
+
 
 if __name__ == "__main__":
     main()
