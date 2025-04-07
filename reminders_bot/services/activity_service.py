@@ -3,7 +3,7 @@ import aiohttp
 from datetime import datetime, timedelta, timezone
 
 from config import API_BASE_URL
-from reminders_bot.bot import reminderBot
+from reminders_bot.bot import reminderBot, user_chat_map
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
@@ -23,7 +23,7 @@ async def fetch_activities():
 
             logger.info(f"Fetching activities starting after {start_date_param}")
 
-            url = f"{API_BASE_URL}/activities?start_date={start_date_param}&sort_by=start_time&sort_order=asc"
+            url = f"{API_BASE_URL}/activities/?start_date={start_date_param}&sort_by=start_time&sort_order=asc"
 
             async with session.get(url) as response:
                 if response.status == 200:
@@ -134,8 +134,25 @@ async def send_reminder(activity, start_time):
         if description := activity.get("description"):
             message += f"\n\n{description}"
 
-        await reminderBot.send_message(chat_id="", text=message)  # needs to fix
+        # Needs to be updated
+        for chat_id in user_chat_map.values():
+            await reminderBot.send_message(chat_id=chat_id, text=message)
         logger.info(f"Sent reminder for activity: {activity.get('id', 'unknown')}")
+
+        await mark_reminder_sent(activity["id"])
 
     except Exception as e:
         logger.error(f"Error sending reminder: {e}")
+
+
+async def mark_reminder_sent(activity_id):
+    url = f"{API_BASE_URL}/activities/{activity_id}/mark_reminder_sent"
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.post(url) as response:
+                if response.status == 200:
+                    logger.info(f"Marked activity {activity_id} as reminder_sent")
+                else:
+                    logger.warning(f"Failed to mark reminder sent for {activity_id}")
+        except Exception as e:
+            logger.error(f"Error marking reminder as sent: {e}")

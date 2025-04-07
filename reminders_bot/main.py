@@ -9,6 +9,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from reminders_bot.services.activity_service import process_events, fetch_activities
 from config import REMINDERS_BOT_TOKEN
+from reminders_bot.bot import user_chat_map
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
@@ -17,9 +18,13 @@ logger = logging.getLogger(__name__)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle the /start command"""
     user = update.effective_user
-    logger.info(f"User {user.id} started the reminders bot")
+    chat_id = update.effective_chat.id
+
+    user_chat_map[str(user.id)] = chat_id
+
+    logger.info(f"User {user.id} started the reminders bot. Chat ID: {chat_id}")
+
     await update.message.reply_text(
         f"Hello {user.first_name}! I'll send reminders for upcoming activities. "
         f"Use /check to manually check for activities now."
@@ -68,7 +73,7 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Total upcoming activities: {len(activities)}\n"
         f"Activities within next 2 days: {len(upcoming)}\n"
         f"Pending reminders: {len(pending_reminders)}\n"
-        f"Next check in: < 10 seconds"
+        f"Next check in: < 5 minutes"
     )
 
     await update.message.reply_text(status)
@@ -87,7 +92,7 @@ async def run_bot():
     scheduler = AsyncIOScheduler()
     scheduler.add_job(
         process_events,
-        IntervalTrigger(seconds=10),
+        IntervalTrigger(minutes=5),
         id="check_events",
         name="Check for upcoming activities",
     )
