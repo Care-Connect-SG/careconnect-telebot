@@ -46,6 +46,10 @@ To start the development server for the **Telegram Bot**, run:
 
 ```bash
 python main.py
+# for reminders_bot only:
+python -m reminders_bot.main
+# for reminders_bot only:
+python -m assistant_bot.main
 ```
 
 ## Workflow
