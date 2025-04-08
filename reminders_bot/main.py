@@ -10,7 +10,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from reminders_bot.services.activity_service import process_events, fetch_activities
 from auth_service import restricted
 from config import REMINDERS_BOT_TOKEN
-from reminders_bot.bot import user_chat_map
+from reminders_bot.chat_registry import user_chat_map
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
