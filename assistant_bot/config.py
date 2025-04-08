@@ -29,4 +29,4 @@ RESPONSE_TEMPLATES = {
     "error": "I'm sorry, I encountered an error while processing your request. Please try again.",
     "unknown_command": "I'm not sure how to help with that. You can ask me about tasks, residents, or activities.",
     "resident_not_found": "Sorry, I couldn't find a resident with that name.",
-} 
+}

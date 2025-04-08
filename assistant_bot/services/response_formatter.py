@@ -6,6 +6,7 @@ from ..config import MAX_MESSAGE_LENGTH, RESPONSE_TEMPLATES
 
 logger = logging.getLogger(__name__)
 
+
 class ResponseFormatter:
     def __init__(self):
         self.max_length = MAX_MESSAGE_LENGTH
@@ -86,56 +87,58 @@ class ResponseFormatter:
             # Multiple residents
             if not resident:
                 return RESPONSE_TEMPLATES["resident_not_found"]
-            
+
             response = f"👥 *Found {len(resident)} residents:*\n\n"
             for idx, res in enumerate(resident[:10], start=1):
                 full_name = res.get("full_name", "Unknown")
                 room_number = res.get("room_number", "Unknown")
                 response += f"{idx}. *{full_name}* (Room: {room_number})\n\n"
-            
+
             if len(resident) > 10:
                 response += f"...and {len(resident) - 10} more residents (showing first 10 only)."
-            
+
             return self._truncate_response(response)
-        
+
         # Single resident
         if not resident:
             return RESPONSE_TEMPLATES["resident_not_found"]
 
         full_name = resident.get("full_name", "Unknown")
         room_number = resident.get("room_number", "Unknown")
-        
+
         # Add more resident details
         medical_conditions = resident.get("medical_conditions", [])
         medications = resident.get("medications", [])
         notes = resident.get("notes", "")
-        
+
         response = f"👤 *Resident Profile: {full_name}*\n"
         response += f"Room: {room_number}\n"
-        
+
         if medical_conditions:
             response += f"Medical Conditions: {', '.join(medical_conditions)}\n"
-        
+
         if medications:
             response += f"Medications: {', '.join(medications)}\n"
-            
+
         if notes:
             response += f"Notes: {notes}\n"
-            
+
         response += "\n"
 
         # Add task information
         if tasks:
             response += f"*Recent tasks for {full_name}:*\n\n"
-            
+
             for idx, task in enumerate(tasks[:5], start=1):
                 title = task.get("task_title", "Untitled Task")
                 status = task.get("status", "Unknown")
                 assigned_to = task.get("assigned_to_name", "Unassigned")
-                
+
                 # Get datetime information
                 start_date = task.get("start_date")
-                date_str = self._format_datetime(start_date) if start_date else "Unknown"
+                date_str = (
+                    self._format_datetime(start_date) if start_date else "Unknown"
+                )
 
                 response += (
                     f"{idx}. *{title}*\n"
@@ -144,7 +147,9 @@ class ResponseFormatter:
                 )
 
             if len(tasks) > 5:
-                response += f"...and {len(tasks) - 5} more tasks (showing first 5 only)."
+                response += (
+                    f"...and {len(tasks) - 5} more tasks (showing first 5 only)."
+                )
         else:
             response += "No recent tasks found for this resident."
 
@@ -167,10 +172,10 @@ class ResponseFormatter:
             return text
 
         # Basic truncation method
-        truncated_text = text[:self.max_length-100]
+        truncated_text = text[: self.max_length - 100]
         # Try to find a reasonable place to break
-        last_newline = truncated_text.rfind('\n')
+        last_newline = truncated_text.rfind("\n")
         if last_newline > self.max_length - 200:
             truncated_text = truncated_text[:last_newline]
 
-        return truncated_text + "\n\n...(message truncated due to length)" 
+        return truncated_text + "\n\n...(message truncated due to length)"

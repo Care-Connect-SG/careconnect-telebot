@@ -8,7 +8,7 @@ from telegram.ext import (
     MessageHandler as TelegramMessageHandler,
     ContextTypes,
     filters,
-    CallbackQueryHandler
+    CallbackQueryHandler,
 )
 from datetime import datetime, timedelta
 
@@ -20,39 +20,40 @@ os.environ["SSL_CERT_FILE"] = certifi.where()
 
 # Configure logging
 logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
 # Initialize message handler
 message_handler = MessageHandler()
 
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Send a message when the command /start is issued."""
     user = update.effective_user
     logger.info(f"User {user.id} started the assistant bot")
-    
+
     # Create quick action buttons
     keyboard = [
         [
             InlineKeyboardButton("List Residents", callback_data="list_residents"),
-            InlineKeyboardButton("Today's Tasks", callback_data="today_tasks")
+            InlineKeyboardButton("Today's Tasks", callback_data="today_tasks"),
         ],
         [
             InlineKeyboardButton("Show Help", callback_data="show_help"),
-            InlineKeyboardButton("Quick Stats", callback_data="quick_stats")
-        ]
+            InlineKeyboardButton("Quick Stats", callback_data="quick_stats"),
+        ],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
+
     welcome_text = (
         f"Welcome to CareConnect Assistant Bot, {user.first_name}! 🤖\n\n"
         "I can help you manage and query information about residents, tasks, and activities.\n\n"
         "Try these quick actions or type /help for more information:"
     )
-    
+
     await update.message.reply_text(welcome_text, reply_markup=reply_markup)
+
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Send a message when the command /help is issued."""
@@ -64,33 +65,27 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/residents - List all residents\n"
         "/tasks - List today's tasks\n"
         "/stats - Show quick statistics\n\n"
-
         "*Natural Language Queries:*\n"
         "You can ask me about tasks, residents, and activities in natural language. For example:\n\n"
-
         "*Tasks:*\n"
         "• What tasks are due today?\n"
         "• Show me all high priority tasks\n"
         "• Any overdue tasks?\n"
         "• List pending tasks for [nurse name]\n\n"
-
         "*Residents:*\n"
         "• How is [resident name] doing?\n"
         "• What happened to [resident name] today?\n"
         "• Show tasks for [resident name]\n"
         "• List residents in [care level]\n\n"
-
         "*Activities:*\n"
         "• What activities are scheduled today?\n"
         "• Show me activities for this week\n"
         "• Any activities in [location]?\n\n"
-
         "*Time Ranges:*\n"
         "• last 3 hours\n"
         "• yesterday\n"
         "• this week\n"
         "• tomorrow\n\n"
-
         "*Follow-up Questions:*\n"
         "You can ask follow-up questions like:\n"
         "• What about tomorrow?\n"
@@ -100,10 +95,12 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.callback_query.message if update.callback_query else update.message
     await message.reply_text(help_text, parse_mode="Markdown")
 
+
 async def list_residents(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """List all residents from MongoDB"""
     logger.info(f"User {update.effective_user.id} requested resident list")
     await message_handler.list_all_residents(update)
+
 
 async def get_today_date_range():
     """Get consistent date range for today's tasks"""
@@ -113,43 +110,43 @@ async def get_today_date_range():
     logger.info(f"Main today range: {today_start} to {today_end}")
     return today_start, today_end
 
+
 async def list_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """List today's tasks"""
     logger.info(f"User {update.effective_user.id} requested today's tasks")
     today_start, today_end = await get_today_date_range()
-    await message_handler._handle_task_query(update, {"start_time": today_start, "end_time": today_end}, {})
+    await message_handler._handle_task_query(
+        update, {"start_time": today_start, "end_time": today_end}, {}
+    )
+
 
 async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show quick statistics about the facility"""
     try:
         # Get statistics from the database
-        total_residents = await message_handler.db.resident_collection.count_documents({})
-        
+        total_residents = await message_handler.db.resident_collection.count_documents(
+            {}
+        )
+
         # Get today's tasks count (including recurring tasks)
         today_start, today_end = await get_today_date_range()
-        today_tasks = await message_handler.db.tasks_collection.count_documents({
-            "$or": [
-                {
-                    "start_date": {
-                        "$gte": today_start,
-                        "$lte": today_end
-                    }
-                },
-                {
-                    "recurring": True,
-                    "recurring_days": {
-                        "$in": [today_start.weekday()]
-                    }
-                }
-            ]
-        })
-        
+        today_tasks = await message_handler.db.tasks_collection.count_documents(
+            {
+                "$or": [
+                    {"start_date": {"$gte": today_start, "$lte": today_end}},
+                    {
+                        "recurring": True,
+                        "recurring_days": {"$in": [today_start.weekday()]},
+                    },
+                ]
+            }
+        )
+
         # Get overdue tasks count consistently
         now = datetime.now()
-        overdue_tasks = await message_handler.db.tasks_collection.count_documents({
-            "status": "pending",
-            "due_date": {"$lt": now}
-        })
+        overdue_tasks = await message_handler.db.tasks_collection.count_documents(
+            {"status": "pending", "due_date": {"$lt": now}}
+        )
 
         stats_text = (
             "📊 *Quick Statistics*\n\n"
@@ -162,17 +159,26 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = [
             [
                 InlineKeyboardButton("Show Today's Tasks", callback_data="today_tasks"),
-                InlineKeyboardButton("Show Overdue Tasks", callback_data="overdue_tasks")
+                InlineKeyboardButton(
+                    "Show Overdue Tasks", callback_data="overdue_tasks"
+                ),
             ]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
-        message = update.callback_query.message if update.callback_query else update.message
-        await message.reply_text(stats_text, parse_mode="Markdown", reply_markup=reply_markup)
+        message = (
+            update.callback_query.message if update.callback_query else update.message
+        )
+        await message.reply_text(
+            stats_text, parse_mode="Markdown", reply_markup=reply_markup
+        )
     except Exception as e:
         logger.error(f"Error showing stats: {str(e)}")
-        message = update.callback_query.message if update.callback_query else update.message
+        message = (
+            update.callback_query.message if update.callback_query else update.message
+        )
         await message.reply_text("Sorry, I couldn't fetch the statistics right now.")
+
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle callback queries from inline buttons"""
@@ -180,11 +186,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     # Create a new update object with the message from the callback query
-    new_update = Update(
-        update.update_id,
-        message=query.message,
-        callback_query=query
-    )
+    new_update = Update(update.update_id, message=query.message, callback_query=query)
 
     if query.data == "list_residents":
         await list_residents(new_update, context)
@@ -192,9 +194,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Get today's date range
         today_start, today_end = await get_today_date_range()
         await message_handler._handle_task_query(
-            new_update, 
-            {"start_time": today_start, "end_time": today_end},
-            {}
+            new_update, {"start_time": today_start, "end_time": today_end}, {}
         )
     elif query.data == "show_help":
         await help_command(new_update, context)
@@ -205,17 +205,13 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         now = datetime.now()  # Use local time consistently
         logger.info(f"Getting overdue tasks (before {now})")
         await message_handler._handle_task_query(
-            new_update, 
-            {},
-            {
-                "status": "pending",
-                "due_date": {"$lt": now}
-            }
+            new_update, {}, {"status": "pending", "due_date": {"$lt": now}}
         )
     elif query.data == "resident_stats":
         await message_handler._handle_resident_query(new_update, {}, {})
     elif query.data == "task_stats":
         await message_handler._handle_task_query(new_update, {}, {})
+
 
 def main():
     """Start the bot."""
@@ -233,12 +229,17 @@ def main():
     application.add_handler(CallbackQueryHandler(handle_callback))
 
     # Add message handler for natural language queries
-    application.add_handler(TelegramMessageHandler(filters.TEXT & ~filters.COMMAND, message_handler.handle_message))
+    application.add_handler(
+        TelegramMessageHandler(
+            filters.TEXT & ~filters.COMMAND, message_handler.handle_message
+        )
+    )
 
     # Start the Bot
     logger.info("Starting Assistant Bot...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
     logger.info("Assistant Bot stopped")
+
 
 if __name__ == "__main__":
     main()
