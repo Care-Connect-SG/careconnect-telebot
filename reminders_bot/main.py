@@ -2,22 +2,19 @@ import asyncio
 import logging
 
 from datetime import datetime, timedelta, timezone
-from telegram import Bot, Update
+from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
 from reminders_bot.services.activity_service import process_events, fetch_activities
 from config import REMINDERS_BOT_TOKEN
+from reminders_bot.chat_registry import user_chat_map
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 logger = logging.getLogger(__name__)
-
-
-user_chat_map = {}
-reminderBot = Bot(token=REMINDERS_BOT_TOKEN)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):

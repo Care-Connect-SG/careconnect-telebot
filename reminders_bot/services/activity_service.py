@@ -1,14 +1,17 @@
 import logging
 import aiohttp
 from datetime import datetime, timedelta, timezone
+from telegram import Bot
 
-from config import API_BASE_URL
-from ..main import reminderBot, user_chat_map
+from config import API_BASE_URL, REMINDERS_BOT_TOKEN
+from reminders_bot.chat_registry import user_chat_map
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
+reminderBot = Bot(token=REMINDERS_BOT_TOKEN)
 
 
 async def fetch_activities():
