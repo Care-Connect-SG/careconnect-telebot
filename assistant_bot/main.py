@@ -10,6 +10,7 @@ from telegram.ext import (
 )
 
 from config import ASSISTANT_BOT_TOKEN, MONGO_URI
+from auth.user_auth import restricted
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
@@ -17,23 +18,25 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 mongo_client = AsyncIOMotorClient(MONGO_URI)
-db = mongo_client["resident"]
-resident_collection = db["resident_info"]
+resident_db = mongo_client["resident"]
+caregiver_db = mongo_client["caregiver"]
+
+users_collection = caregiver_db["users"]
+resident_collection = resident_db["resident_info"]
 
 
+@restricted
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    logger.info(f"User {user.id} started the assistant bot")
+    user_name = context.user_data.get("name", "there")
     await update.message.reply_text(
-        f"Hello {user.first_name}! I'm your assistant bot. "
+        f"Hello {user_name}! I'm your assistant bot. "
         f"Use /residents to see the list of residents."
     )
 
 
+@restricted
 async def list_residents(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """List all residents from MongoDB"""
-    logger.info(f"User {update.effective_user.id} requested resident list")
-
     try:
         residents_cursor = resident_collection.find({}, {"full_name": 1})
         residents = await residents_cursor.to_list(length=50)
@@ -56,12 +59,28 @@ async def list_residents(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 
+@restricted
+async def whoami_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show current user information"""
+    user_info = (
+        f"👤 Your Information:\n\n"
+        f"Name: {context.user_data.get('name')}\n"
+        f"Email: {context.user_data.get('email')}\n"
+        f"Role: {context.user_data.get('role')}\n"
+        f"Telegram Username: @{update.effective_user.username}"
+    )
+
+    await update.message.reply_text(user_info)
+
+
+@restricted
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Send a message when the command /help is issued."""
     help_text = (
         "Here are the commands you can use:\n\n"
         "/start - Start the bot\n"
         "/residents - List all residents\n"
+        "/whoami - Show your user information\n"
         "/help - Show this help message"
     )
     await update.message.reply_text(help_text)
@@ -77,6 +96,7 @@ def main():
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("residents", list_residents))
+    application.add_handler(CommandHandler("whoami", whoami_command))
     application.add_handler(CommandHandler("help", help_command))
 
     application.add_handler(MessageHandler(filters.COMMAND, unknown))

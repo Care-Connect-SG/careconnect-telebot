@@ -8,6 +8,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
 from reminders_bot.services.activity_service import process_events, fetch_activities
+from auth.user_auth import restricted
 from config import REMINDERS_BOT_TOKEN
 from reminders_bot.chat_registry import user_chat_map
 
@@ -17,20 +18,25 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+@restricted
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     chat_id = update.effective_chat.id
+    user_name = context.user_data.get("name", "there")
 
     user_chat_map[str(user.id)] = chat_id
 
-    logger.info(f"User {user.id} started the reminders bot. Chat ID: {chat_id}")
+    logger.info(
+        f"User {user.id} ({user_name}) started the reminders bot. Chat ID: {chat_id}"
+    )
 
     await update.message.reply_text(
-        f"Hello {user.first_name}! I'll send reminders for upcoming activities. "
+        f"Hello {user_name}! I'll send reminders for upcoming activities. "
         f"Use /check to manually check for activities now."
     )
 
 
+@restricted
 async def check_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Manually check for activities"""
     await update.message.reply_text("Checking for upcoming activities now...")
@@ -38,6 +44,7 @@ async def check_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Check complete!")
 
 
+@restricted
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show bot status"""
     activities = await fetch_activities()
@@ -79,6 +86,20 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(status)
 
 
+@restricted
+async def whoami_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show current user information"""
+    user_info = (
+        f"👤 Your Information:\n\n"
+        f"Name: {context.user_data.get('name')}\n"
+        f"Email: {context.user_data.get('email')}\n"
+        f"Role: {context.user_data.get('role')}\n"
+        f"Telegram Username: @{update.effective_user.username}"
+    )
+
+    await update.message.reply_text(user_info)
+
+
 async def run_bot():
     """Async function to run the bot with proper event loop management"""
     application = Application.builder().token(REMINDERS_BOT_TOKEN).build()
@@ -86,6 +107,7 @@ async def run_bot():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("check", check_command))
     application.add_handler(CommandHandler("status", status_command))
+    application.add_handler(CommandHandler("whoami", whoami_command))
 
     await application.initialize()
 
