@@ -1,10 +1,10 @@
 import logging
 from typing import List, Dict, Any, Optional
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorClient
 
-from ..config import (
+from config import (
     MONGO_URI,
     DB_NAME,
     RESIDENT_DB_NAME,

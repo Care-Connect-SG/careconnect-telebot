@@ -1,11 +1,10 @@
 import logging
-from typing import Dict, Any, List
-from datetime import datetime, timedelta
+from typing import Dict, Any
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 from ..services.database import DatabaseService
-from .query_parser import QueryParser
+from .query_handler import QueryParser
 from .response_handler import ResponseFormatter, RESPONSE_TEMPLATES
 
 logger = logging.getLogger(__name__)

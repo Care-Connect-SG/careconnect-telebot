@@ -12,7 +12,7 @@ from telegram.ext import (
 )
 from datetime import datetime, timedelta
 
-from assistant_bot.config import ASSISTANT_BOT_TOKEN
+from config import ASSISTANT_BOT_TOKEN
 from assistant_bot.handlers.message_handler import MessageHandler
 
 # Set SSL certificate environment variable
