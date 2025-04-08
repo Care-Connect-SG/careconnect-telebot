@@ -18,9 +18,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 mongo_client = AsyncIOMotorClient(MONGO_URI)
-db = mongo_client["caregiver"]
-users_collection = db["users"]
-resident_collection = db["resident_info"]
+resident_db = mongo_client["resident"]
+caregiver_db = mongo_client["caregiver"]
+
+users_collection = caregiver_db["users"]
+resident_collection = resident_db["resident_info"]
 
 
 @restricted
