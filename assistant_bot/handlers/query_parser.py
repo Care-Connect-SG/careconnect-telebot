@@ -1,6 +1,6 @@
 import re
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Dict, Any, Tuple
 
 logger = logging.getLogger(__name__)

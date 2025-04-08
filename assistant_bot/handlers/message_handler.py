@@ -5,9 +5,8 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 from ..services.database import DatabaseService
-from ..services.query_parser import QueryParser
-from ..services.response_formatter import ResponseFormatter
-from ..config import RESPONSE_TEMPLATES
+from .query_parser import QueryParser
+from .response_handler import ResponseFormatter, RESPONSE_TEMPLATES
 
 logger = logging.getLogger(__name__)
 

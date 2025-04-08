@@ -3,7 +3,7 @@ import aiohttp
 from datetime import datetime, timedelta, timezone
 
 from config import API_BASE_URL
-from reminders_bot.bot import reminderBot, user_chat_map
+from ..main import reminderBot, user_chat_map
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO

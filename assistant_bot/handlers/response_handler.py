@@ -2,9 +2,17 @@ import logging
 from typing import List, Dict, Any
 from datetime import datetime
 
-from ..config import MAX_MESSAGE_LENGTH, RESPONSE_TEMPLATES
 
 logger = logging.getLogger(__name__)
+
+MAX_MESSAGE_LENGTH = 4000
+
+RESPONSE_TEMPLATES = {
+    "no_results": "No results found matching your criteria.",
+    "error": "I'm sorry, I encountered an error while processing your request. Please try again.",
+    "unknown_command": "I'm not sure how to help with that. You can ask me about tasks, residents, or activities.",
+    "resident_not_found": "Sorry, I couldn't find a resident with that name.",
+}
 
 
 class ResponseFormatter:
