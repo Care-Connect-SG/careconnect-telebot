@@ -8,7 +8,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
 from reminders_bot.services.activity_service import process_events, fetch_activities
-from auth_service import restricted
+from auth.user_auth import restricted
 from config import REMINDERS_BOT_TOKEN
 from reminders_bot.chat_registry import user_chat_map
 
@@ -26,7 +26,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_chat_map[str(user.id)] = chat_id
 
-    logger.info(f"User {user.id} ({user_name}) started the reminders bot. Chat ID: {chat_id}")
+    logger.info(
+        f"User {user.id} ({user_name}) started the reminders bot. Chat ID: {chat_id}"
+    )
 
     await update.message.reply_text(
         f"Hello {user_name}! I'll send reminders for upcoming activities. "
@@ -94,7 +96,7 @@ async def whoami_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Role: {context.user_data.get('role')}\n"
         f"Telegram Username: @{update.effective_user.username}"
     )
-    
+
     await update.message.reply_text(user_info)
 
 

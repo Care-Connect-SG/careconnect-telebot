@@ -10,7 +10,7 @@ from telegram.ext import (
 )
 
 from config import ASSISTANT_BOT_TOKEN, MONGO_URI
-from auth_service import restricted
+from auth.user_auth import restricted
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
@@ -69,7 +69,7 @@ async def whoami_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Role: {context.user_data.get('role')}\n"
         f"Telegram Username: @{update.effective_user.username}"
     )
-    
+
     await update.message.reply_text(user_info)
 
 
