@@ -1,6 +1,7 @@
 import os
 import logging
 import certifi
+from motor.motor_asyncio import AsyncIOMotorClient
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -12,8 +13,9 @@ from telegram.ext import (
 )
 from datetime import datetime, timedelta
 
-from config import ASSISTANT_BOT_TOKEN
+from config import ASSISTANT_BOT_TOKEN, MONGO_URI
 from assistant_bot.handlers.message_handler import MessageHandler
+from auth.user_auth import restricted
 
 # Set SSL certificate environment variable
 os.environ["SSL_CERT_FILE"] = certifi.where()
@@ -24,13 +26,26 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Initialize MongoDB
+mongo_client = AsyncIOMotorClient(
+    MONGO_URI,
+    tlsAllowInvalidCertificates=True
+)
+resident_db = mongo_client["resident"]
+caregiver_db = mongo_client["caregiver"]
+
+users_collection = caregiver_db["users"]
+resident_collection = resident_db["resident_info"]
+
 # Initialize message handler
 message_handler = MessageHandler()
 
 
+@restricted
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Send a message when the command /start is issued."""
     user = update.effective_user
+    user_name = context.user_data.get("name", user.first_name)
     logger.info(f"User {user.id} started the assistant bot")
 
     # Create quick action buttons
@@ -47,7 +62,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     welcome_text = (
-        f"Welcome to CareConnect Assistant Bot, {user.first_name}! 🤖\n\n"
+        f"Welcome to CareConnect Assistant Bot, {user_name}! 🤖\n\n"
         "I can help you manage and query information about residents, tasks, and activities.\n\n"
         "Try these quick actions or type /help for more information:"
     )
@@ -55,6 +70,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(welcome_text, reply_markup=reply_markup)
 
 
+@restricted
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Send a message when the command /help is issued."""
     help_text = (
@@ -64,7 +80,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/help - Show this help message\n"
         "/residents - List all residents\n"
         "/tasks - List today's tasks\n"
-        "/stats - Show quick statistics\n\n"
+        "/stats - Show quick statistics\n"
+        "/whoami - Show your user information\n\n"
         "*Natural Language Queries:*\n"
         "You can ask me about tasks, residents, and activities in natural language. For example:\n\n"
         "*Tasks:*\n"
@@ -96,6 +113,21 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await message.reply_text(help_text, parse_mode="Markdown")
 
 
+@restricted
+async def whoami_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show current user information"""
+    user_info = (
+        f"👤 Your Information:\n\n"
+        f"Name: {context.user_data.get('name')}\n"
+        f"Email: {context.user_data.get('email')}\n"
+        f"Role: {context.user_data.get('role')}\n"
+        f"Telegram Username: @{update.effective_user.username}"
+    )
+
+    await update.message.reply_text(user_info)
+
+
+@restricted
 async def list_residents(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """List all residents from MongoDB"""
     logger.info(f"User {update.effective_user.id} requested resident list")
@@ -111,6 +143,7 @@ async def get_today_date_range():
     return today_start, today_end
 
 
+@restricted
 async def list_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """List today's tasks"""
     logger.info(f"User {update.effective_user.id} requested today's tasks")
@@ -120,6 +153,7 @@ async def list_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+@restricted
 async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show quick statistics about the facility"""
     try:
@@ -222,6 +256,7 @@ def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("residents", list_residents))
+    application.add_handler(CommandHandler("whoami", whoami_command))
     application.add_handler(CommandHandler("tasks", list_tasks))
     application.add_handler(CommandHandler("stats", show_stats))
 
