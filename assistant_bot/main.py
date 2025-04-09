@@ -1,7 +1,10 @@
 import logging
 import os
 import uuid
+import wave
 import tempfile
+import asyncio
+import ffmpeg
 from motor.motor_asyncio import AsyncIOMotorClient
 from telegram import Update
 from telegram.ext import (
@@ -12,29 +15,31 @@ from telegram.ext import (
     filters,
 )
 from config import ASSISTANT_BOT_TOKEN, MONGO_URI, AZURE_SPEECH_KEY, AZURE_SPEECH_ENDPOINT
-from pydub import AudioSegment
 import azure.cognitiveservices.speech as speechsdk
-from pydub.utils import which
 
+# 🛠️ Make sure ffmpeg binary is accessible
+ffmpeg_path = r"C:\ffmpeg\bin\ffmpeg.exe"
+os.environ["PATH"] += os.pathsep + os.path.dirname(ffmpeg_path)
 
-# Azure Speech Config
+# 🎤 Azure Speech Config
 speech_config = speechsdk.SpeechConfig(
     subscription=AZURE_SPEECH_KEY,
     endpoint=AZURE_SPEECH_ENDPOINT,
 )
 speech_config.speech_recognition_language = "en-US"
 
+# 📋 Logging
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# 🗃️ MongoDB Setup
 mongo_client = AsyncIOMotorClient(MONGO_URI)
 db = mongo_client["resident"]
 resident_collection = db["resident_info"]
 
+# 🟢 Bot Handlers
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        f"Hello {update.effective_user.first_name}! Send me a voice message and I’ll transcribe it for you."
-    )
+    await update.message.reply_text(f"Hello {update.effective_user.first_name}! How can I help you today.")
 
 async def list_residents(update: Update, context: ContextTypes.DEFAULT_TYPE):
     residents = await resident_collection.find({}, {"full_name": 1}).to_list(50)
@@ -52,25 +57,13 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Sorry, I didn't understand that command.")
 
-
-ffmpeg_bin = r"C:\Users\klohe\OneDrive\Documents\ffmpeg-7.1.1-essentials_build\ffmpeg-7.1.1-essentials_build\bin"
-ffmpeg_path = os.path.join(ffmpeg_bin, "ffmpeg.exe")
-ffprobe_path = os.path.join(ffmpeg_bin, "ffprobe.exe")
-
-# ✅ Register paths with pydub
-AudioSegment.converter = r"C:\Users\klohe\OneDrive\Documents\ffmpeg-7.1.1-essentials_build\ffmpeg-7.1.1-essentials_build\bin\ffmpeg.exe"
-AudioSegment.ffprobe   = r"C:\Users\klohe\OneDrive\Documents\ffmpeg-7.1.1-essentials_build\ffmpeg-7.1.1-essentials_build\bin\ffprobe.exe"
-
-logger = logging.getLogger(__name__)
-
+# 🎧 Voice Handler
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    ogg_path, wav_path = None, None
     try:
         voice = update.message.voice
         file = await context.bot.get_file(voice.file_id)
-        print("FFmpeg:", which(ffmpeg_path))
-        print("FFprobe:", which(ffprobe_path))
 
-        # 🔧 Use local 'tmp' folder in your project
         tmp_dir = os.path.join(os.path.dirname(__file__), "tmp")
         os.makedirs(tmp_dir, exist_ok=True)
 
@@ -78,23 +71,33 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ogg_path = os.path.join(tmp_dir, f"{unique_id}.ogg")
         wav_path = os.path.join(tmp_dir, f"{unique_id}.wav")
 
-        logger.info(f"Downloading to: {ogg_path}")
+        logger.info(f"Downloading voice to: {ogg_path}")
         await file.download_to_drive(ogg_path)
 
-        if not os.path.exists(ogg_path):
-            raise FileNotFoundError(f"OGG file not found at {ogg_path}")
+        if not os.path.exists(ogg_path) or os.path.getsize(ogg_path) == 0:
+            raise FileNotFoundError(f"OGG file not found or empty at {ogg_path}")
 
-        # 🎧 Convert
-        logger.info("Converting to WAV...")
-        audio = AudioSegment.from_file(ogg_path, format="ogg")
-        audio.export(wav_path, format="wav")
+        logger.info("Converting OGG to WAV using ffmpeg-python...")
+        ffmpeg.input(ogg_path).output(wav_path, ac=1, ar=16000).run(overwrite_output=True)
 
-        # 🧠 Transcribe
+        with wave.open(wav_path, 'rb') as wf:
+            logger.info(f"WAV format: {wf.getnchannels()} channels, {wf.getframerate()} Hz, {wf.getsampwidth()} bytes/sample")
+
         recognizer = speechsdk.SpeechRecognizer(
             speech_config=speech_config,
-            audio_config=speechsdk.audio.AudioConfig(filename=wav_path)
+            audio_config=speechsdk.audio.AudioConfig(filename=wav_path),
         )
-        result = recognizer.recognize_once()
+
+        loop = asyncio.get_running_loop()
+        try:
+            result = await asyncio.wait_for(
+                loop.run_in_executor(None, recognizer.recognize_once),
+                timeout=15
+            )
+        except asyncio.TimeoutError:
+            logger.error("Speech recognition timed out.")
+            await update.message.reply_text("⏱️ Speech recognition timed out. Please try again.")
+            return
 
         if result.reason == speechsdk.ResultReason.RecognizedSpeech:
             await update.message.reply_text(f"You said: \"{result.text}\"")
@@ -105,11 +108,15 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error in handle_voice: {e}")
         await update.message.reply_text("Something went wrong while processing your voice.")
     finally:
-        # 🧹 Clean up
         for path in [ogg_path, wav_path]:
-            if os.path.exists(path):
-                os.remove(path)
-    
+            try:
+                if path and os.path.exists(path):
+                    os.remove(path)
+            except PermissionError:
+                logger.warning(f"Could not delete file {path} because it is still in use.")
+
+
+# 🚀 Entry Point
 def main():
     application = Application.builder().token(ASSISTANT_BOT_TOKEN).build()
 
