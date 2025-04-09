@@ -271,9 +271,7 @@ async def list_all_residents(update: Update) -> None:
             full_name = resident.get("full_name", "Unknown")
             room_number = resident.get("room_number", "Unknown")
             
-            response += (
-                f"{idx}. *{full_name}* (Room: {room_number})\n\n"
-            )
+            response += f"{idx}. *{full_name}* (Room: {room_number})\n\n"
         
         message = update.callback_query.message if update.callback_query else update.message
         await message.reply_text(response, parse_mode="Markdown")
