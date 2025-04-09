@@ -24,6 +24,7 @@ from config import ASSISTANT_BOT_TOKEN, MONGO_URI, AZURE_SPEECH_KEY, AZURE_SPEEC
 import azure.cognitiveservices.speech as speechsdk
 from .services.ai_service import summarize_text
 from .services.database import DatabaseService
+from auth.user_auth import restricted
 
 # Set SSL certificate path for HTTPS requests
 os.environ['SSL_CERT_FILE'] = certifi.where()
@@ -50,6 +51,10 @@ mongo_client = AsyncIOMotorClient(
     tlsAllowInvalidCertificates=True
 )
 db = mongo_client["resident"]
+resident_db = mongo_client["resident"]
+caregiver_db = mongo_client["caregiver"]
+
+users_collection = caregiver_db["users"]
 resident_collection = db["resident_info"]
 db_service = DatabaseService(mongo_client)
 
@@ -57,25 +62,59 @@ db_service = DatabaseService(mongo_client)
 SELECTING_RESIDENT, RECORDING_NOTE, CONFIRMING_NOTE = range(3)
 
 # 🟢 Bot Handlers
+@restricted
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(f"Hello {update.effective_user.first_name}! How can I help you today.")
+    user_name = context.user_data.get("name", "there")
+    await update.message.reply_text(
+        f"Hello {user_name}! I'm your assistant bot. "
+        f"Use /residents to see the list of residents."
+    )
 
+@restricted
 async def list_residents(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    residents = await resident_collection.find({}, {"full_name": 1}).to_list(50)
-    if not residents:
-        await update.message.reply_text("No residents found.")
-    else:
-        msg = "👵👴 Resident List:\n" + "\n".join(
-            [f"{i+1}. {r.get('full_name', 'Unnamed')}" for i, r in enumerate(residents)]
-        )
-        await update.message.reply_text(msg)
+    """List all residents from MongoDB"""
+    try:
+        residents_cursor = resident_collection.find({}, {"full_name": 1})
+        residents = await residents_cursor.to_list(length=50)
 
+        if not residents:
+            await update.message.reply_text("No residents found in the database.")
+            return
+
+        response = "👵👴 Resident List:\n\n"
+        for idx, resident in enumerate(residents, start=1):
+            name = resident.get("full_name", "Unnamed")
+            response += f"{idx}. {name}\n"
+
+        await update.message.reply_text(response)
+        logger.info(f"Sent list of {len(residents)} residents")
+    except Exception as e:
+        logger.error(f"Error retrieving residents: {e}")
+        await update.message.reply_text(
+            "Sorry, I couldn't retrieve the resident list. Please try again later."
+        )
+
+@restricted
+async def whoami_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show current user information"""
+    user_info = (
+        f"👤 Your Information:\n\n"
+        f"Name: {context.user_data.get('name')}\n"
+        f"Email: {context.user_data.get('email')}\n"
+        f"Role: {context.user_data.get('role')}\n"
+        f"Telegram Username: @{update.effective_user.username}"
+    )
+
+    await update.message.reply_text(user_info)
+
+@restricted
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     help_text = (
         "Here are the commands you can use:\n\n"
         "/start - Start the bot\n"
         "/residents - List all residents\n"
         "/voicenote - Add a voice note for a resident\n"
+        "/whoami - Show your user information\n"
         "/help - Show this help message\n\n"
         "You can also send a voice message directly to transcribe it."
     )
@@ -85,6 +124,7 @@ async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Sorry, I didn't understand that command.")
 
 # Voice Note Command Handlers
+@restricted
 async def voicenote_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start the voice note process by selecting a resident"""
     logger.info("Starting voice note command")
@@ -341,6 +381,7 @@ def main():
     # Add command handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("residents", list_residents))
+    application.add_handler(CommandHandler("whoami", whoami_command))
     application.add_handler(CommandHandler("help", help_command))
     
     # Voice note conversation handler
@@ -360,7 +401,8 @@ def main():
     application.add_handler(MessageHandler(filters.COMMAND, unknown))
 
     logger.info("Starting Assistant Bot...")
-    application.run_polling()
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    logger.info("Assistant Bot stopped")
 
 if __name__ == "__main__":
     main()

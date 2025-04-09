@@ -9,6 +9,7 @@ azure-cognitiveservices-speech==1.35.0
 black==25.1.0
 bson==0.5.10
 certifi==2025.1.31
+charset-normalizer==3.4.1
 click==8.1.8
 colorama==0.4.6
 dill==0.3.9
@@ -41,4 +42,5 @@ tomlkit==0.13.2
 typing_extensions==4.13.1
 tzdata==2025.2
 tzlocal==5.3.1
+urllib3==2.3.0
 yarl==1.19.0
