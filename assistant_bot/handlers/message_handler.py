@@ -259,25 +259,23 @@ async def handle_general_query(update: Update) -> None:
 
 async def list_all_residents(update: Update) -> None:
     try:
-        residents = await db.resident_collection.find().to_list(length=50)
+        residents = await db.resident_collection.find({}, {"full_name": 1}).to_list(length=50)
         
         if not residents:
             message = update.callback_query.message if update.callback_query else update.message
             await message.reply_text("No residents found in the database.")
             return
 
-        response = "🏠 *List of All Residents*\n\n"
+        response = "👵👴 Resident List:\n\n"
         for idx, resident in enumerate(residents, start=1):
-            full_name = resident.get("full_name", "Unknown")
-            room_number = resident.get("room_number", "Unknown")
-            
-            response += f"{idx}. *{full_name}* (Room: {room_number})\n\n"
+            name = resident.get("full_name", "Unnamed")
+            response += f"{idx}. {name}\n"
         
         message = update.callback_query.message if update.callback_query else update.message
-        await message.reply_text(response, parse_mode="Markdown")
+        await message.reply_text(response)
         logger.info(f"Sent list of {len(residents)} residents")
         
     except Exception as e:
         logger.error(f"Error listing residents: {str(e)}")
         message = update.callback_query.message if update.callback_query else update.message
-        await message.reply_text("Sorry, I encountered an error while retrieving the resident list.")
+        await message.reply_text("Sorry, I couldn't retrieve the resident list. Please try again later.")
