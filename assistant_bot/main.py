@@ -5,6 +5,8 @@ import wave
 import tempfile
 import asyncio
 import ffmpeg
+import ssl
+import certifi
 from motor.motor_asyncio import AsyncIOMotorClient
 from telegram import Update
 from telegram.ext import (
@@ -14,8 +16,13 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
-from config import ASSISTANT_BOT_TOKEN, MONGO_URI, AZURE_SPEECH_KEY, AZURE_SPEECH_ENDPOINT
+from config import ASSISTANT_BOT_TOKEN, MONGO_URI, AZURE_SPEECH_KEY, AZURE_SPEECH_ENDPOINT, OPENAI_API_KEY
 import azure.cognitiveservices.speech as speechsdk
+from .services.ai_service import summarize_text
+
+# Set SSL certificate path for HTTPS requests
+os.environ['SSL_CERT_FILE'] = certifi.where()
+os.environ['REQUESTS_CA_BUNDLE'] = certifi.where()
 
 # 🛠️ Make sure ffmpeg binary is accessible
 ffmpeg_path = r"C:\ffmpeg\bin\ffmpeg.exe"
@@ -33,7 +40,10 @@ logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=lo
 logger = logging.getLogger(__name__)
 
 # 🗃️ MongoDB Setup
-mongo_client = AsyncIOMotorClient(MONGO_URI)
+mongo_client = AsyncIOMotorClient(
+    MONGO_URI,
+    tlsAllowInvalidCertificates=True
+)
 db = mongo_client["resident"]
 resident_collection = db["resident_info"]
 
@@ -100,7 +110,15 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         if result.reason == speechsdk.ResultReason.RecognizedSpeech:
-            await update.message.reply_text(f"You said: \"{result.text}\"")
+            transcribed_text = result.text
+            
+            # Get AI summary
+            ai_summary = await summarize_text(transcribed_text)
+            
+            # Format the response with both the transcription and summary
+            response = f"You said: \"{transcribed_text}\"\n\nAI Summary: {ai_summary}"
+            
+            await update.message.reply_text(response)
         else:
             await update.message.reply_text("Sorry, I couldn't understand the audio.")
 
