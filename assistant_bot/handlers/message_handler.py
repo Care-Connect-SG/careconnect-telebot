@@ -120,9 +120,16 @@ async def handle_task_query(
         tasks = await db.get_tasks(query_filters)
 
         if not tasks:
-            suggestions = await get_task_suggestions(filters)
-            response = f"I couldn't find any tasks matching your criteria. {suggestions}"
             message = update.callback_query.message if update.callback_query else update.message
+            
+            # Check if it's an overdue task query
+            if filters.get("status") == "pending" and filters.get("due_date", {}).get("$lt"):
+                # For overdue tasks
+                response = "No overdue tasks found."
+            else:
+                # For all other task queries
+                response = "No tasks found matching your criteria."
+                
             await message.reply_text(response, parse_mode="Markdown")
             return
 
@@ -156,6 +163,9 @@ async def get_task_suggestions(filters: Dict[str, Any]) -> str:
     if filters.get("assigned_to"):
         suggestions.append("Consider checking tasks assigned to other staff members.")
 
+    if not suggestions:
+        return ""
+        
     return "Here are some suggestions:\n" + "\n".join(f"• {s}" for s in suggestions)
 
 async def handle_activity_query(
@@ -199,10 +209,8 @@ async def handle_resident_query(
         resident = await db.get_resident_by_name(resident_name)
 
         if not resident:
-            suggestions = await get_resident_suggestions(resident_name)
-            response = f"I couldn't find a resident named '{resident_name}'. {suggestions}"
             message = update.callback_query.message if update.callback_query else update.message
-            await message.reply_text(response)
+            await message.reply_text("No residents found matching your criteria.", parse_mode="Markdown")
             return
 
         tasks = []
@@ -223,23 +231,17 @@ async def handle_resident_query(
 
 async def get_resident_suggestions(query: str) -> str:
     suggestions = []
-
+    
     if len(query) < 3:
-        suggestions.append("Try using the resident's full name or last name.")
+        suggestions.append("Try using a longer search term.")
     else:
-        try:
-            partial_matches = await db.resident_collection.find(
-                {"full_name": {"$regex": f".*{query}.*", "$options": "i"}}
-            ).limit(3).to_list(3)
-            
-            if partial_matches:
-                names = [match.get("full_name", "Unknown") for match in partial_matches]
-                suggestions.append(f"Did you mean: {', '.join(names)}?")
-            else:
-                suggestions.append("Try checking the resident list with /residents command.")
-        except Exception as e:
-            logger.error(f"Error getting resident suggestions: {str(e)}")
-            
+        suggestions.append("Check for spelling errors in the name.")
+        suggestions.append("Try searching for the resident's last name only.")
+        suggestions.append("Try searching with fewer characters to get more results.")
+    
+    if not suggestions:
+        return ""
+        
     return "Here are some suggestions:\n" + "\n".join(f"• {s}" for s in suggestions)
 
 async def handle_general_query(update: Update) -> None:
@@ -268,13 +270,9 @@ async def list_all_residents(update: Update) -> None:
         for idx, resident in enumerate(residents, start=1):
             full_name = resident.get("full_name", "Unknown")
             room_number = resident.get("room_number", "Unknown")
-            medical_conditions = ", ".join(resident.get("medical_conditions", []))
-            medications = ", ".join(resident.get("medications", []))
             
             response += (
-                f"{idx}. *{full_name}* (Room: {room_number})\n"
-                f"   Medical conditions: {medical_conditions}\n"
-                f"   Medications: {medications}\n\n"
+                f"{idx}. *{full_name}* (Room: {room_number})\n\n"
             )
         
         message = update.callback_query.message if update.callback_query else update.message
