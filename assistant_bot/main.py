@@ -14,7 +14,7 @@ from telegram.ext import (
 from datetime import datetime, timedelta
 
 from config import ASSISTANT_BOT_TOKEN, MONGO_URI
-from assistant_bot.handlers.message_handler import MessageHandler
+from assistant_bot.handlers import message_handler
 from auth.user_auth import restricted, users_collection
 
 # Set SSL certificate environment variable
@@ -36,10 +36,6 @@ caregiver_db = mongo_client["caregiver"]
 
 users_collection = caregiver_db["users"]
 resident_collection = resident_db["resident_info"]
-
-# Initialize message handler
-message_handler = MessageHandler()
-
 
 @restricted
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -148,7 +144,7 @@ async def list_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """List today's tasks"""
     logger.info(f"User {update.effective_user.id} requested today's tasks")
     today_start, today_end = await get_today_date_range()
-    await message_handler._handle_task_query(
+    await message_handler.handle_task_query(
         update, {"start_time": today_start, "end_time": today_end}, {}
     )
 
@@ -158,13 +154,13 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show quick statistics about the facility"""
     try:
         # Get statistics from the database
-        total_residents = await message_handler.db.resident_collection.count_documents(
-            {}
-        )
+        from assistant_bot.services.database import DatabaseService
+        db = DatabaseService()
+        total_residents = await db.resident_collection.count_documents({})
 
         # Get today's tasks count (including recurring tasks)
         today_start, today_end = await get_today_date_range()
-        today_tasks = await message_handler.db.tasks_collection.count_documents(
+        today_tasks = await db.tasks_collection.count_documents(
             {
                 "$or": [
                     {"start_date": {"$gte": today_start, "$lte": today_end}},
@@ -178,7 +174,7 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Get overdue tasks count consistently
         now = datetime.now()
-        overdue_tasks = await message_handler.db.tasks_collection.count_documents(
+        overdue_tasks = await db.tasks_collection.count_documents(
             {"status": "pending", "due_date": {"$lt": now}}
         )
 
@@ -259,7 +255,7 @@ async def check_auth_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         await message_handler.list_all_residents(new_update)
     elif query.data == "today_tasks":
         today_start, today_end = await get_today_date_range()
-        await message_handler._handle_task_query(
+        await message_handler.handle_task_query(
             new_update, {"start_time": today_start, "end_time": today_end}, {}
         )
     elif query.data == "show_help":
@@ -302,12 +298,12 @@ async def check_auth_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         await query.message.reply_text(help_text, parse_mode="Markdown")
     elif query.data == "quick_stats":
         try:
-            total_residents = await message_handler.db.resident_collection.count_documents(
-                {}
-            )
+            from assistant_bot.services.database import DatabaseService
+            db = DatabaseService()
+            total_residents = await db.resident_collection.count_documents({})
 
             today_start, today_end = await get_today_date_range()
-            today_tasks = await message_handler.db.tasks_collection.count_documents(
+            today_tasks = await db.tasks_collection.count_documents(
                 {
                     "$or": [
                         {"start_date": {"$gte": today_start, "$lte": today_end}},
@@ -320,7 +316,7 @@ async def check_auth_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
             )
 
             now = datetime.now()
-            overdue_tasks = await message_handler.db.tasks_collection.count_documents(
+            overdue_tasks = await db.tasks_collection.count_documents(
                 {"status": "pending", "due_date": {"$lt": now}}
             )
 
@@ -350,13 +346,13 @@ async def check_auth_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
             await query.message.reply_text("Sorry, I couldn't fetch the statistics right now.")
     elif query.data == "overdue_tasks":
         now = datetime.now()
-        await message_handler._handle_task_query(
+        await message_handler.handle_task_query(
             new_update, {}, {"status": "pending", "due_date": {"$lt": now}}
         )
     elif query.data == "resident_stats":
-        await message_handler._handle_resident_query(new_update, {}, {})
+        await message_handler.handle_resident_query(new_update, {}, {})
     elif query.data == "task_stats":
-        await message_handler._handle_task_query(new_update, {}, {})
+        await message_handler.handle_task_query(new_update, {}, {})
 
 
 def main():
