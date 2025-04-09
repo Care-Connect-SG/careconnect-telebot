@@ -7,7 +7,6 @@ from .database import db, resident_db
 
 logger = logging.getLogger(__name__)
 
-# Collections
 tasks_collection = db["tasks"]
 users_collection = db["users"]
 resident_collection = resident_db["resident_info"]
@@ -32,7 +31,6 @@ async def get_tasks(query=None):
         else:
             logger.info("No tasks found matching the query filters")
 
-        # Enrich tasks with names
         for task in tasks:
             if "assigned_to" in task and task["assigned_to"]:
                 user = await users_collection.find_one(

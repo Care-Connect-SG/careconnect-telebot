@@ -7,7 +7,6 @@ from .database import resident_db, db
 
 logger = logging.getLogger(__name__)
 
-# Collections
 resident_collection = resident_db["resident_info"]
 users_collection = db["users"]
 tasks_collection = db["tasks"]
@@ -19,7 +18,6 @@ async def get_resident_by_name(name: str) -> Optional[Dict[str, Any]]:
     name = " ".join(name.split()).strip()
     logger.info(f"Searching for resident with name: '{name}'")
 
-    # Try exact match first (case insensitive)
     query = {"full_name": {"$regex": f"^{name}$", "$options": "i"}}
     resident = await resident_collection.find_one(query)
 
@@ -27,7 +25,6 @@ async def get_resident_by_name(name: str) -> Optional[Dict[str, Any]]:
         logger.info(f"Found resident by exact match: {resident.get('full_name')}")
         return resident
 
-    # Try partial match with full name
     query = {"full_name": {"$regex": f".*{name}.*", "$options": "i"}}
     resident = await resident_collection.find_one(query)
 
@@ -35,12 +32,11 @@ async def get_resident_by_name(name: str) -> Optional[Dict[str, Any]]:
         logger.info(f"Found resident by partial full name match: {resident.get('full_name')}")
         return resident
 
-    # Try matching individual parts of the name
     name_parts = name.split()
     if len(name_parts) > 0:
         name_queries = []
         for part in name_parts:
-            if len(part) > 2:  # Only consider parts with more than 2 characters
+            if len(part) > 2:
                 name_queries.append(
                     {"full_name": {"$regex": f"\\b{part}\\b", "$options": "i"}}
                 )

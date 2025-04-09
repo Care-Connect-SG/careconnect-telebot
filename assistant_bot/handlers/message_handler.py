@@ -15,7 +15,7 @@ from .response_handler import (
 logger = logging.getLogger(__name__)
 
 db = DatabaseService()
-user_context = {}  # Store user context for better conversations
+user_context = {}
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
@@ -122,12 +122,9 @@ async def handle_task_query(
         if not tasks:
             message = update.callback_query.message if update.callback_query else update.message
             
-            # Check if it's an overdue task query
             if filters.get("status") == "pending" and filters.get("due_date", {}).get("$lt"):
-                # For overdue tasks
                 response = "No overdue tasks found."
             else:
-                # For all other task queries
                 response = "No tasks found matching your criteria."
                 
             await message.reply_text(response, parse_mode="Markdown")

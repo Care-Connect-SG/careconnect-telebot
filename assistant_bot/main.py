@@ -17,16 +17,13 @@ from config import ASSISTANT_BOT_TOKEN, MONGO_URI
 from assistant_bot.handlers import message_handler
 from auth.user_auth import restricted, users_collection
 
-# Set SSL certificate environment variable
 os.environ["SSL_CERT_FILE"] = certifi.where()
 
-# Configure logging
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# Initialize MongoDB
 mongo_client = AsyncIOMotorClient(
     MONGO_URI,
     tlsAllowInvalidCertificates=True
@@ -39,12 +36,10 @@ resident_collection = resident_db["resident_info"]
 
 @restricted
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Send a message when the command /start is issued."""
     user = update.effective_user
     user_name = context.user_data.get("name", user.first_name)
     logger.info(f"User {user.id} started the assistant bot")
 
-    # Create quick action buttons
     keyboard = [
         [
             InlineKeyboardButton("List Residents", callback_data="list_residents"),
@@ -68,7 +63,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @restricted
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Send a message when the command /help is issued."""
     help_text = (
         "🤖 *CareConnect Bot Help* 🤖\n\n"
         "*Available Commands:*\n"
@@ -111,7 +105,6 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @restricted
 async def whoami_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show current user information"""
     user_info = (
         f"👤 Your Information:\n\n"
         f"Name: {context.user_data.get('name')}\n"
@@ -125,13 +118,11 @@ async def whoami_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @restricted
 async def list_residents(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """List all residents from MongoDB"""
     logger.info(f"User {update.effective_user.id} requested resident list")
     await message_handler.list_all_residents(update)
 
 
 async def get_today_date_range():
-    """Get consistent date range for today's tasks"""
     now = datetime.now()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     today_end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
@@ -141,7 +132,6 @@ async def get_today_date_range():
 
 @restricted
 async def list_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """List today's tasks"""
     logger.info(f"User {update.effective_user.id} requested today's tasks")
     today_start, today_end = await get_today_date_range()
     await message_handler.handle_task_query(
@@ -151,14 +141,11 @@ async def list_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @restricted
 async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show quick statistics about the facility"""
     try:
-        # Get statistics from the database
         from assistant_bot.services.database import DatabaseService
         db = DatabaseService()
         total_residents = await db.resident_collection.count_documents({})
 
-        # Get today's tasks count (including recurring tasks)
         today_start, today_end = await get_today_date_range()
         today_tasks = await db.tasks_collection.count_documents(
             {
@@ -172,7 +159,6 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             }
         )
 
-        # Get overdue tasks count consistently
         now = datetime.now()
         overdue_tasks = await db.tasks_collection.count_documents(
             {"status": "pending", "due_date": {"$lt": now}}
@@ -210,13 +196,10 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await message.reply_text("Sorry, I couldn't fetch the statistics right now.")
 
 
-# Add a new function to handle authorization for callback queries
 async def check_auth_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Custom handler for callback queries that checks authorization first"""
     query = update.callback_query
     await query.answer()
     
-    # Check authorization
     username = update.effective_user.username
     user = await users_collection.find_one({"telegram_handle": username})
     
@@ -242,15 +225,12 @@ async def check_auth_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         return
     
-    # Set user data in context
     context.user_data["name"] = user["name"]
     context.user_data["email"] = user["email"]
     context.user_data["role"] = user["role"]
     
-    # Create a new update object with the message from the callback query
     new_update = Update(update.update_id, message=query.message, callback_query=query)
     
-    # Process callback data
     if query.data == "list_residents":
         await message_handler.list_all_residents(new_update)
     elif query.data == "today_tasks":
@@ -259,6 +239,7 @@ async def check_auth_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
             new_update, {"start_time": today_start, "end_time": today_end}, {}
         )
     elif query.data == "show_help":
+        
         help_text = (
             "🤖 *CareConnect Bot Help* 🤖\n\n"
             "*Available Commands:*\n"
@@ -356,11 +337,8 @@ async def check_auth_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 def main():
-    """Start the bot."""
-    # Create the Application and pass it your bot's token
     application = Application.builder().token(ASSISTANT_BOT_TOKEN).build()
 
-    # Add command handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("residents", list_residents))
@@ -368,17 +346,14 @@ def main():
     application.add_handler(CommandHandler("tasks", list_tasks))
     application.add_handler(CommandHandler("stats", show_stats))
 
-    # Add callback query handler - use our custom handler instead of handle_callback
     application.add_handler(CallbackQueryHandler(check_auth_callback))
 
-    # Add message handler for natural language queries
     application.add_handler(
         TelegramMessageHandler(
             filters.TEXT & ~filters.COMMAND, message_handler.handle_message
         )
     )
 
-    # Start the Bot
     logger.info("Starting Assistant Bot...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
     logger.info("Assistant Bot stopped")

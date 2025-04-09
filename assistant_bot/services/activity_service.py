@@ -7,7 +7,6 @@ from .database import db
 
 logger = logging.getLogger(__name__)
 
-# Collections
 activities_collection = db["activities"]
 users_collection = db["users"]
 
@@ -21,7 +20,6 @@ async def get_activities(filters: Dict[str, Any] = None, limit: int = 20) -> Lis
             .to_list(length=limit)
         )
 
-        # Enrich activities with creator names
         for activity in activities:
             if "created_by" in activity and activity["created_by"]:
                 try:
