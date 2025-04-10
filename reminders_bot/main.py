@@ -47,12 +47,12 @@ async def run_bot():
 
     scheduler = AsyncIOScheduler()
 
-    # scheduler.add_job(
-    #     process_events,
-    #     IntervalTrigger(seconds=10),
-    #     id="check_activities",
-    #     name="Check for upcoming activities",
-    # )
+    scheduler.add_job(
+        process_events,
+        IntervalTrigger(seconds=10),
+        id="check_activities",
+        name="Check for upcoming activities",
+    )
 
     scheduler.add_job(
         process_task_reminders,

@@ -24,28 +24,27 @@ async def fetch_tasks(user_id=None):
         async with aiohttp.ClientSession() as session:
             now_utc = datetime.now(timezone.utc)
 
-            # Current date
             current_date = now_utc.strftime("%Y-%m-%d")
 
-            # Date 2 days from now
             future_date = (now_utc + timedelta(days=2)).strftime("%Y-%m-%d")
 
-            # Use both dates as a range
             url = f"{API_BASE_URL}/tasks/telegram?start_date={current_date}&end_date={future_date}"
 
             if user_id:
                 url += f"&assigned_to={user_id}"
 
-            logger.info(f"Fetching tasks from {current_date} to {future_date}" +
-                       (f" for user {user_id}" if user_id else ""))
+            logger.info(
+                f"Fetching tasks from {current_date} to {future_date}"
+                + (f" for user {user_id}" if user_id else "")
+            )
 
             async with session.get(url) as response:
                 if response.status == 200:
                     tasks = await response.json()
 
                     logger.info(
-                        f"Fetched {len(tasks)} tasks" +
-                        (f" for user {user_id}" if user_id else "")
+                        f"Fetched {len(tasks)} tasks"
+                        + (f" for user {user_id}" if user_id else "")
                     )
                     return tasks
                 else:
@@ -59,6 +58,7 @@ async def fetch_tasks(user_id=None):
     except Exception as e:
         logger.error(f"Error fetching tasks: {e}")
         return []
+
 
 async def process_task_reminders(context=None):
     """Process tasks and send reminders"""
@@ -105,7 +105,6 @@ async def process_task_reminders(context=None):
                 logger.debug(f"  Time until reminder: {time_until_reminder}")
                 logger.debug(f"  Time until start: {time_until_start}")
 
-                # Check if it's time to send a reminder and the reminder hasn't been sent yet
                 if (
                     now_utc >= reminder_time
                     and now_utc < start_time
@@ -118,11 +117,12 @@ async def process_task_reminders(context=None):
                     sent_count += 1
 
             except Exception as e:
-                logger.error(
-                    f"Error processing task {task.get('id', 'unknown')}: {e}"
-                )
+                logger.error(f"Error processing task {task.get('id', 'unknown')}: {e}")
 
-    logger.info(f"Processed tasks for {len(user_chat_map)} users, sent {sent_count} reminders")
+    logger.info(
+        f"Processed tasks for {len(user_chat_map)} users, sent {sent_count} reminders"
+    )
+
 
 async def send_task_reminder(task, start_time, chat_id):
     """Send a reminder message for a task to a specific chat
@@ -171,7 +171,9 @@ async def send_task_reminder(task, start_time, chat_id):
         message = f"📋 TASK REMINDER{priority_text}: {title} {time_display}{resident_text}{room_text}{details_text}"
 
         await reminderBot.send_message(chat_id=chat_id, text=message)
-        logger.info(f"Sent reminder for task: {task.get('id', 'unknown')} to chat {chat_id}")
+        logger.info(
+            f"Sent reminder for task: {task.get('id', 'unknown')} to chat {chat_id}"
+        )
 
         await mark_task_reminder_sent(task["id"])
 
@@ -188,7 +190,9 @@ async def mark_task_reminder_sent(task_id):
                 if response.status == 200:
                     logger.info(f"Marked task {task_id} as reminder_sent")
                 else:
-                    logger.error(f"Failed to mark task reminder sent. Status: {response.status}")
+                    logger.error(
+                        f"Failed to mark task reminder sent. Status: {response.status}"
+                    )
                     try:
                         error_text = await response.text()
                         logger.error(f"Response error: {error_text}")
