@@ -1,11 +1,10 @@
+import os
 import logging
 import os
 import uuid
 import wave
-import tempfile
 import asyncio
 import ffmpeg
-import ssl
 import certifi
 from datetime import datetime
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -14,34 +13,32 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
     CommandHandler,
+    MessageHandler as TelegramMessageHandler,
     ContextTypes,
     MessageHandler,
     CallbackQueryHandler,
     ConversationHandler,
     filters,
+    CallbackQueryHandler,
 )
-from config import ASSISTANT_BOT_TOKEN, MONGO_URI, AZURE_SPEECH_KEY, AZURE_SPEECH_ENDPOINT, OPENAI_API_KEY
+from utils.config import ASSISTANT_BOT_TOKEN, MONGO_URI, AZURE_SPEECH_KEY, AZURE_SPEECH_ENDPOINT, OPENAI_API_KEY
 import azure.cognitiveservices.speech as speechsdk
 from .services.ai_service import summarize_text
-from .services.database import DatabaseService
+from .db.connection import DatabaseService
 from auth.user_auth import restricted
 
-# Set SSL certificate path for HTTPS requests
 os.environ['SSL_CERT_FILE'] = certifi.where()
 os.environ['REQUESTS_CA_BUNDLE'] = certifi.where()
 
-# 🛠️ Make sure ffmpeg binary is accessible
 ffmpeg_path = r"C:\ffmpeg\bin\ffmpeg.exe"
 os.environ["PATH"] += os.pathsep + os.path.dirname(ffmpeg_path)
 
-# 🎤 Azure Speech Config
 speech_config = speechsdk.SpeechConfig(
     subscription=AZURE_SPEECH_KEY,
     endpoint=AZURE_SPEECH_ENDPOINT,
 )
 speech_config.speech_recognition_language = "en-US"
 
-# 📋 Logging
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -51,7 +48,6 @@ mongo_client = AsyncIOMotorClient(
     tlsAllowInvalidCertificates=True
 )
 db = mongo_client["resident"]
-resident_db = mongo_client["resident"]
 caregiver_db = mongo_client["caregiver"]
 
 users_collection = caregiver_db["users"]
@@ -64,39 +60,74 @@ SELECTING_RESIDENT, RECORDING_NOTE, CONFIRMING_NOTE = range(3)
 # 🟢 Bot Handlers
 @restricted
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_name = context.user_data.get("name", "there")
-    await update.message.reply_text(
-        f"Hello {user_name}! I'm your assistant bot. "
-        f"Use /residents to see the list of residents."
+    user = update.effective_user
+    user_name = context.user_data.get("name", user.first_name)
+    logger.info(f"User {user.id} started the assistant bot")
+
+    keyboard = [
+        [
+            InlineKeyboardButton("List Residents", callback_data="list_residents"),
+            InlineKeyboardButton("Today's Tasks", callback_data="today_tasks"),
+        ],
+        [
+            InlineKeyboardButton("Show Help", callback_data="show_help"),
+            InlineKeyboardButton("Quick Stats", callback_data="quick_stats"),
+        ],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    welcome_text = (
+        f"Welcome to CareConnect Assistant Bot, {user_name}! 🤖\n\n"
+        "I can help you manage and query information about residents, tasks, and activities.\n\n"
+        "Try these quick actions or type /help for more information:"
     )
 
+    await update.message.reply_text(welcome_text, reply_markup=reply_markup)
+
+
 @restricted
-async def list_residents(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """List all residents from MongoDB"""
-    try:
-        residents_cursor = resident_collection.find({}, {"full_name": 1})
-        residents = await residents_cursor.to_list(length=50)
-
-        if not residents:
-            await update.message.reply_text("No residents found in the database.")
-            return
-
-        response = "👵👴 Resident List:\n\n"
-        for idx, resident in enumerate(residents, start=1):
-            name = resident.get("full_name", "Unnamed")
-            response += f"{idx}. {name}\n"
-
-        await update.message.reply_text(response)
-        logger.info(f"Sent list of {len(residents)} residents")
-    except Exception as e:
-        logger.error(f"Error retrieving residents: {e}")
-        await update.message.reply_text(
-            "Sorry, I couldn't retrieve the resident list. Please try again later."
-        )
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    help_text = (
+        "🤖 *CareConnect Bot Help* 🤖\n\n"
+        "*Available Commands:*\n"
+        "/start - Start the bot\n"
+        "/help - Show this help message\n"
+        "/residents - List all residents\n"
+        "/tasks - List today's tasks\n"
+        "/stats - Show quick statistics\n"
+        "/whoami - Show your user information\n\n"
+        "*Natural Language Queries:*\n"
+        "You can ask me about tasks, residents, and activities in natural language. For example:\n\n"
+        "*Tasks:*\n"
+        "• What tasks are due today?\n"
+        "• Show me all high priority tasks\n"
+        "• Any overdue tasks?\n"
+        "• List pending tasks for [nurse name]\n\n"
+        "*Residents:*\n"
+        "• How is [resident name] doing?\n"
+        "• What happened to [resident name] today?\n"
+        "• Show tasks for [resident name]\n"
+        "• List residents in [care level]\n\n"
+        "*Activities:*\n"
+        "• What activities are scheduled today?\n"
+        "• Show me activities for this week\n"
+        "• Any activities in [location]?\n\n"
+        "*Time Ranges:*\n"
+        "• last 3 hours\n"
+        "• yesterday\n"
+        "• this week\n"
+        "• tomorrow\n\n"
+        "*Follow-up Questions:*\n"
+        "You can ask follow-up questions like:\n"
+        "• What about tomorrow?\n"
+        "• And high priority tasks?\n"
+        "• Also show me activities"
+    )
+    message = update.callback_query.message if update.callback_query else update.message
+    await message.reply_text(help_text, parse_mode="Markdown")
 
 @restricted
 async def whoami_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show current user information"""
     user_info = (
         f"👤 Your Information:\n\n"
         f"Name: {context.user_data.get('name')}\n"
@@ -118,71 +149,293 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/help - Show this help message\n\n"
         "You can also send a voice message directly to transcribe it."
     )
-    await update.message.reply_text(help_text)
+
+async def list_residents(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info(f"User {update.effective_user.id} requested resident list")
+    await message_handler.list_all_residents(update)
+
+
+async def get_today_date_range():
+    now = datetime.now()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    today_end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+    logger.info(f"Main today range: {today_start} to {today_end}")
+    return today_start, today_end
+
+
+@restricted
+async def list_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info(f"User {update.effective_user.id} requested today's tasks")
+    today_start, today_end = await get_today_date_range()
+    await message_handler.handle_task_query(
+        update, {"start_time": today_start, "end_time": today_end}, {}
+    )
 
 async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Sorry, I didn't understand that command.")
+
+@restricted
+async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        from db.connection import DatabaseService
+
+        db = DatabaseService()
+        total_residents = await db.resident_collection.count_documents({})
+
+        today_start, today_end = await get_today_date_range()
+        today_tasks = await db.tasks_collection.count_documents(
+            {
+                "$or": [
+                    {"start_date": {"$gte": today_start, "$lte": today_end}},
+                    {
+                        "recurring": True,
+                        "recurring_days": {"$in": [today_start.weekday()]},
+                    },
+                ]
+            }
+        )
+
+        now = datetime.now()
+        overdue_tasks = await db.tasks_collection.count_documents(
+            {"status": "pending", "due_date": {"$lt": now}}
+        )
+
+        stats_text = (
+            "📊 *Quick Statistics*\n\n"
+            f"• Total Residents: {total_residents}\n"
+            f"• Today's Tasks: {today_tasks}\n"
+            f"• Overdue Tasks: {overdue_tasks}\n\n"
+            "Use the buttons below for more details:"
+        )
+
+        keyboard = [
+            [
+                InlineKeyboardButton("Show Today's Tasks", callback_data="today_tasks"),
+                InlineKeyboardButton(
+                    "Show Overdue Tasks", callback_data="overdue_tasks"
+                ),
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        message = (
+            update.callback_query.message if update.callback_query else update.message
+        )
+        await message.reply_text(
+            stats_text, parse_mode="Markdown", reply_markup=reply_markup
+        )
+    except Exception as e:
+        logger.error(f"Error showing stats: {str(e)}")
+        message = (
+            update.callback_query.message if update.callback_query else update.message
+        )
+        await message.reply_text("Sorry, I couldn't fetch the statistics right now.")
+
+
+async def check_auth_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    username = update.effective_user.username
+    user = await users_collection.find_one({"telegram_handle": username})
+
+    if not user and username:
+        clean_username = username.lower().replace("@", "")
+        user = await users_collection.find_one({"telegram_handle": clean_username})
+
+        if not user:
+            user = await users_collection.find_one(
+                {
+                    "$expr": {
+                        "$eq": [
+                            {"$toLower": "$telegram_handle"},
+                            username.lower(),
+                        ]
+                    }
+                }
+            )
+
+    if not user:
+        await query.message.reply_text(
+            "Sorry, you are not authorized to use this bot. Please make sure your Telegram username is registered in the system."
+        )
+        return
+
+    context.user_data["name"] = user["name"]
+    context.user_data["email"] = user["email"]
+    context.user_data["role"] = user["role"]
+
+    new_update = Update(update.update_id, message=query.message, callback_query=query)
+
+    if query.data == "list_residents":
+        await message_handler.list_all_residents(new_update)
+    elif query.data == "today_tasks":
+        today_start, today_end = await get_today_date_range()
+        await message_handler.handle_task_query(
+            new_update, {"start_time": today_start, "end_time": today_end}, {}
+        )
+    elif query.data == "show_help":
+
+        help_text = (
+            "🤖 *CareConnect Bot Help* 🤖\n\n"
+            "*Available Commands:*\n"
+            "/start - Start the bot\n"
+            "/help - Show this help message\n"
+            "/residents - List all residents\n"
+            "/tasks - List today's tasks\n"
+            "/stats - Show quick statistics\n"
+            "/whoami - Show your user information\n\n"
+            "*Natural Language Queries:*\n"
+            "You can ask me about tasks, residents, and activities in natural language. For example:\n\n"
+            "*Tasks:*\n"
+            "• What tasks are due today?\n"
+            "• Show me all high priority tasks\n"
+            "• Any overdue tasks?\n"
+            "• List pending tasks for [nurse name]\n\n"
+            "*Residents:*\n"
+            "• How is [resident name] doing?\n"
+            "• What happened to [resident name] today?\n"
+            "• Show tasks for [resident name]\n"
+            "• List residents in [care level]\n\n"
+            "*Activities:*\n"
+            "• What activities are scheduled today?\n"
+            "• Show me activities for this week\n"
+            "• Any activities in [location]?\n\n"
+            "*Time Ranges:*\n"
+            "• last 3 hours\n"
+            "• yesterday\n"
+            "• this week\n"
+            "• tomorrow\n\n"
+            "*Follow-up Questions:*\n"
+            "You can ask follow-up questions like:\n"
+            "• What about tomorrow?\n"
+            "• And high priority tasks?\n"
+            "• Also show me activities"
+        )
+        await query.message.reply_text(help_text, parse_mode="Markdown")
+    elif query.data == "quick_stats":
+        try:
+            from db.connection import DatabaseService
+
+            db = DatabaseService()
+            total_residents = await db.resident_collection.count_documents({})
+
+            today_start, today_end = await get_today_date_range()
+            today_tasks = await db.tasks_collection.count_documents(
+                {
+                    "$or": [
+                        {"start_date": {"$gte": today_start, "$lte": today_end}},
+                        {
+                            "recurring": True,
+                            "recurring_days": {"$in": [today_start.weekday()]},
+                        },
+                    ]
+                }
+            )
+
+            now = datetime.now()
+            overdue_tasks = await db.tasks_collection.count_documents(
+                {"status": "pending", "due_date": {"$lt": now}}
+            )
+
+            stats_text = (
+                "📊 *Quick Statistics*\n\n"
+                f"• Total Residents: {total_residents}\n"
+                f"• Today's Tasks: {today_tasks}\n"
+                f"• Overdue Tasks: {overdue_tasks}\n\n"
+                "Use the buttons below for more details:"
+            )
+
+            keyboard = [
+                [
+                    InlineKeyboardButton(
+                        "Show Today's Tasks", callback_data="today_tasks"
+                    ),
+                    InlineKeyboardButton(
+                        "Show Overdue Tasks", callback_data="overdue_tasks"
+                    ),
+                ]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+
+            await query.message.reply_text(
+                stats_text, parse_mode="Markdown", reply_markup=reply_markup
+            )
+        except Exception as e:
+            logger.error(f"Error showing stats: {str(e)}")
+            await query.message.reply_text(
+                "Sorry, I couldn't fetch the statistics right now."
+            )
+    elif query.data == "overdue_tasks":
+        now = datetime.now()
+        await message_handler.handle_task_query(
+            new_update, {}, {"status": "pending", "due_date": {"$lt": now}}
+        )
+    elif query.data == "resident_stats":
+        await message_handler.handle_resident_query(new_update, {}, {})
+    elif query.data == "task_stats":
+        await message_handler.handle_task_query(new_update, {}, {})
 
 # Voice Note Command Handlers
 @restricted
 async def voicenote_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start the voice note process by selecting a resident"""
     logger.info("Starting voice note command")
-    
+
     # Fetch all residents
     residents = await db_service.get_all_residents(limit=20)
-    
+
     if not residents:
         await update.message.reply_text("No residents found in the database.")
         return ConversationHandler.END
-    
+
     # Create keyboard with resident buttons
     keyboard = []
     for resident in residents:
         name = resident.get("full_name", "Unknown")
         room = resident.get("room_number", "")
         display = f"{name} (Room: {room})" if room else name
-        
+
         # Store resident ID in the callback data
         callback_data = f"resident_{resident['_id']}"
         keyboard.append([InlineKeyboardButton(display, callback_data=callback_data)])
-    
+
     # Add cancel button
     keyboard.append([InlineKeyboardButton("Cancel", callback_data="cancel")])
-    
+
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(
         "Select a resident to add a voice note:",
         reply_markup=reply_markup
     )
-    
+
     return SELECTING_RESIDENT
 
 async def resident_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle resident selection and prompt for voice note"""
     query = update.callback_query
     await query.answer()
-    
+
     if query.data == "cancel":
         await query.message.edit_text("Voice note creation cancelled.")
         return ConversationHandler.END
-    
+
     # Extract resident ID from callback data
     resident_id = query.data.replace("resident_", "")
     context.user_data["current_resident_id"] = resident_id
-    
+
     # Get resident details
     resident = await resident_collection.find_one({"_id": ObjectId(resident_id)})
     if not resident:
         await query.message.edit_text("Error: Resident not found.")
         return ConversationHandler.END
-    
+
     context.user_data["resident_name"] = resident.get("full_name", "Unknown")
-    
+
     await query.message.edit_text(
         f"Selected: {resident.get('full_name')}\n\nPlease send a voice message for your note."
     )
-    
+
     return RECORDING_NOTE
 
 async def process_voice_note(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -229,21 +482,21 @@ async def process_voice_note(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
         if result.reason == speechsdk.ResultReason.RecognizedSpeech:
             transcribed_text = result.text
-            
+
             # Get AI summary
             ai_summary = await summarize_text(transcribed_text)
-            
+
             # Store the transcription and summary for later use
             context.user_data["transcription"] = transcribed_text
             context.user_data["ai_summary"] = ai_summary
-            
+
             # Format the response with both the transcription and summary
             response = (
                 f"You said: \"{transcribed_text}\"\n\n"
                 f"AI Summary: {ai_summary}\n\n"
                 f"Do you want to save this note for {context.user_data['resident_name']}?"
             )
-            
+
             # Create confirmation keyboard
             keyboard = [
                 [
@@ -253,7 +506,7 @@ async def process_voice_note(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 [InlineKeyboardButton("Cancel", callback_data="cancel")]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
-            
+
             await update.message.reply_text(response, reply_markup=reply_markup)
             return CONFIRMING_NOTE
         else:
@@ -277,32 +530,32 @@ async def save_note(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Save the note to the resident's record"""
     query = update.callback_query
     await query.answer()
-    
+
     if query.data == "cancel":
         await query.message.edit_text("Voice note cancelled. No note was saved.")
         return ConversationHandler.END
-    
+
     resident_id = context.user_data.get("current_resident_id")
     resident_name = context.user_data.get("resident_name", "Unknown")
-    
+
     # Determine which text to save based on the button pressed
     if query.data == "save_summary":
         note_text = f"[AI Summary] {context.user_data.get('ai_summary')}"
     else:  # save_transcript
         note_text = f"[Voice Transcript] {context.user_data.get('transcription')}"
-    
+
     # Add date/time prefix to the note
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
     note_with_timestamp = f"[{timestamp}] {note_text}"
-    
+
     # Save to database
     success = await db_service.add_resident_note(resident_id, note_with_timestamp)
-    
+
     if success:
         await query.message.edit_text(f"✅ Voice note successfully saved for {resident_name}.")
     else:
         await query.message.edit_text(f"❌ Failed to save note for {resident_name}. Please try again.")
-    
+
     # Clear conversation data
     context.user_data.clear()
     return ConversationHandler.END
@@ -351,13 +604,13 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if result.reason == speechsdk.ResultReason.RecognizedSpeech:
             transcribed_text = result.text
-            
+
             # Get AI summary
             ai_summary = await summarize_text(transcribed_text)
-            
+
             # Format the response with both the transcription and summary
             response = f"You said: \"{transcribed_text}\"\n\nAI Summary: {ai_summary}"
-            
+
             await update.message.reply_text(response)
         else:
             await update.message.reply_text("Sorry, I couldn't understand the audio.")
@@ -374,16 +627,14 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.warning(f"Could not delete file {path} because it is still in use.")
 
 
-# 🚀 Entry Point
 def main():
     application = Application.builder().token(ASSISTANT_BOT_TOKEN).build()
 
-    # Add command handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("residents", list_residents))
     application.add_handler(CommandHandler("whoami", whoami_command))
     application.add_handler(CommandHandler("help", help_command))
-    
+
     # Voice note conversation handler
     voice_note_handler = ConversationHandler(
         entry_points=[CommandHandler("voicenote", voicenote_start)],
@@ -395,10 +646,20 @@ def main():
         fallbacks=[CommandHandler("cancel", lambda u, c: ConversationHandler.END)]
     )
     application.add_handler(voice_note_handler)
-    
+
     # Regular message handlers
     application.add_handler(MessageHandler(filters.VOICE, handle_voice))
     application.add_handler(MessageHandler(filters.COMMAND, unknown))
+    application.add_handler(CommandHandler("tasks", list_tasks))
+    application.add_handler(CommandHandler("stats", show_stats))
+
+    application.add_handler(CallbackQueryHandler(check_auth_callback))
+
+    application.add_handler(
+        TelegramMessageHandler(
+            filters.TEXT & ~filters.COMMAND, message_handler.handle_message
+        )
+    )
 
     logger.info("Starting Assistant Bot...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)

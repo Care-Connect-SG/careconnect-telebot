@@ -3,17 +3,14 @@ from functools import wraps
 from motor.motor_asyncio import AsyncIOMotorClient
 from telegram import Update
 from telegram.ext import ContextTypes
-from config import MONGO_URI
+from utils.config import MONGO_URI
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-mongo_client = AsyncIOMotorClient(
-    MONGO_URI,
-    tlsAllowInvalidCertificates=True
-)
+mongo_client = AsyncIOMotorClient(MONGO_URI, tlsAllowInvalidCertificates=True)
 db = mongo_client["caregiver"]
 users_collection = db["users"]
 

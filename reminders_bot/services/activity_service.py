@@ -3,7 +3,7 @@ import aiohttp
 from datetime import datetime, timedelta, timezone
 from telegram import Bot
 
-from config import API_BASE_URL, REMINDERS_BOT_TOKEN
+from utils.config import API_BASE_URL, REMINDERS_BOT_TOKEN
 from reminders_bot.chat_registry import user_chat_map
 
 logging.basicConfig(
