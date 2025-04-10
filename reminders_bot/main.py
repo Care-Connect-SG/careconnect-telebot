@@ -24,24 +24,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     user_name = context.user_data.get("name", "there")
 
-    user_chat_map[str(user.id)] = chat_id
+    mongo_user_id = context.user_data.get("id")
+
+    user_chat_map[mongo_user_id] = chat_id
 
     logger.info(
-        f"User {user.id} ({user_name}) started the reminders bot. Chat ID: {chat_id}"
+        f"User {user.id} ({user_name}) started the reminders bot. Chat ID: {chat_id}, MongoDB ID: {mongo_user_id}"
     )
 
     await update.message.reply_text(
-        f"Hello {user_name}! I'll send reminders for upcoming activities. "
-        f"Use /check to manually check for activities now."
+        f"Hello {user_name}! I'll send reminders for upcoming events. "
     )
-
-
-@restricted
-async def check_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Manually check for activities"""
-    await update.message.reply_text("Checking for upcoming activities now...")
-    await process_events()
-    await update.message.reply_text("Check complete!")
 
 
 @restricted
@@ -91,6 +84,7 @@ async def whoami_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show current user information"""
     user_info = (
         f"👤 Your Information:\n\n"
+        f"User ID: {context.user_data.get('id')}\n"
         f"Name: {context.user_data.get('name')}\n"
         f"Email: {context.user_data.get('email')}\n"
         f"Role: {context.user_data.get('role')}\n"
@@ -105,7 +99,6 @@ async def run_bot():
     application = Application.builder().token(REMINDERS_BOT_TOKEN).build()
 
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("check", check_command))
     application.add_handler(CommandHandler("status", status_command))
     application.add_handler(CommandHandler("whoami", whoami_command))
 
