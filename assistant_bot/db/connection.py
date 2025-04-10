@@ -99,6 +99,16 @@ class DatabaseService:
             logger.error(f"Error fetching all residents: {str(e)}")
             return []
 
+    async def get_tasks(self, query_filters: Dict[str, Any], limit=50):
+        """Get tasks based on query filters"""
+        try:
+            cursor = self.task_collection.find(query_filters)
+            tasks = await cursor.to_list(length=limit)
+            return tasks
+        except Exception as e:
+            logger.error(f"Error fetching tasks: {str(e)}")
+            return []
+
     async def add_resident_note(self, resident_id, note):
         """Add a note to a resident's record
 

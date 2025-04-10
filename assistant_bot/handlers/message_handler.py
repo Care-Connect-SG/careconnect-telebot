@@ -14,7 +14,13 @@ from .response_handler import (
 
 logger = logging.getLogger(__name__)
 
-db = DatabaseService()
+# Initialize empty db variable that will be set from main.py
+db = None
+
+def init_handler(database_service: DatabaseService):
+    global db
+    db = database_service
+
 user_context = {}
 
 

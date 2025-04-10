@@ -1,11 +1,20 @@
 import logging
-import openai
+import os
+import certifi
+from openai import AsyncOpenAI
 from utils.config import OPENAI_API_KEY
 
 logger = logging.getLogger(__name__)
 
-openai.api_key = OPENAI_API_KEY
+# Set SSL certificate path
+os.environ["SSL_CERT_FILE"] = certifi.where()
+os.environ["REQUESTS_CA_BUNDLE"] = certifi.where()
 
+# Initialize the async client
+client = AsyncOpenAI(
+    api_key=OPENAI_API_KEY,
+    http_client=None  # Let the client use default httpx client
+)
 
 async def summarize_text(text):
     """
@@ -23,8 +32,7 @@ async def summarize_text(text):
 
         prompt = f"Please summarize and refine the following spoken text into concise notes:\n\n{text}"
 
-        client = openai.OpenAI(api_key=OPENAI_API_KEY)
-        response = client.chat.completions.create(
+        response = await client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {

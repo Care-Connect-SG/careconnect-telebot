@@ -31,6 +31,7 @@ from utils.config import (
 import azure.cognitiveservices.speech as speechsdk
 from .services.ai_service import summarize_text
 from .db.connection import DatabaseService
+from .handlers.message_handler import handle_message, list_all_residents, handle_task_query, handle_resident_query, init_handler
 from auth.user_auth import restricted
 
 os.environ["SSL_CERT_FILE"] = certifi.where()
@@ -59,6 +60,9 @@ users_collection = caregiver_db["users"]
 resident_collection = db["resident_info"]
 db_service = DatabaseService(mongo_client)
 
+# Initialize message handler with database service
+init_handler(db_service)
+
 # Conversation states
 SELECTING_RESIDENT, RECORDING_NOTE, CONFIRMING_NOTE = range(3)
 
@@ -76,8 +80,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("Today's Tasks", callback_data="today_tasks"),
         ],
         [
-            InlineKeyboardButton("Show Help", callback_data="show_help"),
+            InlineKeyboardButton("Add Voice Note", callback_data="voicenote"),
             InlineKeyboardButton("Quick Stats", callback_data="quick_stats"),
+        ],
+        [
+            InlineKeyboardButton("Show Help", callback_data="show_help"),
         ],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -101,7 +108,11 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/residents - List all residents\n"
         "/tasks - List today's tasks\n"
         "/stats - Show quick statistics\n"
+        "/voicenote - Add a voice note for a resident\n"
         "/whoami - Show your user information\n\n"
+        "*Voice Notes:*\n"
+        "• Use /voicenote to add a voice note for a specific resident\n"
+        "• You can also send a voice message directly to get a transcription\n\n"
         "*Natural Language Queries:*\n"
         "You can ask me about tasks, residents, and activities in natural language. For example:\n\n"
         "*Tasks:*\n"
@@ -146,22 +157,9 @@ async def whoami_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(user_info)
 
 
-@restricted
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    help_text = (
-        "Here are the commands you can use:\n\n"
-        "/start - Start the bot\n"
-        "/residents - List all residents\n"
-        "/voicenote - Add a voice note for a resident\n"
-        "/whoami - Show your user information\n"
-        "/help - Show this help message\n\n"
-        "You can also send a voice message directly to transcribe it."
-    )
-
-
 async def list_residents(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"User {update.effective_user.id} requested resident list")
-    await message_handler.list_all_residents(update)
+    await list_all_residents(update)
 
 
 async def get_today_date_range():
@@ -176,7 +174,7 @@ async def get_today_date_range():
 async def list_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"User {update.effective_user.id} requested today's tasks")
     today_start, today_end = await get_today_date_range()
-    await message_handler.handle_task_query(
+    await handle_task_query(
         update, {"start_time": today_start, "end_time": today_end}, {}
     )
 
@@ -188,13 +186,10 @@ async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
 @restricted
 async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        from db.connection import DatabaseService
-
-        db = DatabaseService()
-        total_residents = await db.resident_collection.count_documents({})
+        total_residents = await resident_collection.count_documents({})
 
         today_start, today_end = await get_today_date_range()
-        today_tasks = await db.tasks_collection.count_documents(
+        today_tasks = await db_service.task_collection.count_documents(
             {
                 "$or": [
                     {"start_date": {"$gte": today_start, "$lte": today_end}},
@@ -207,7 +202,7 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         now = datetime.now()
-        overdue_tasks = await db.tasks_collection.count_documents(
+        overdue_tasks = await db_service.task_collection.count_documents(
             {"status": "pending", "due_date": {"$lt": now}}
         )
 
@@ -279,14 +274,13 @@ async def check_auth_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     new_update = Update(update.update_id, message=query.message, callback_query=query)
 
     if query.data == "list_residents":
-        await message_handler.list_all_residents(new_update)
+        await list_all_residents(new_update)
     elif query.data == "today_tasks":
         today_start, today_end = await get_today_date_range()
-        await message_handler.handle_task_query(
+        await handle_task_query(
             new_update, {"start_time": today_start, "end_time": today_end}, {}
         )
     elif query.data == "show_help":
-
         help_text = (
             "🤖 *CareConnect Bot Help* 🤖\n\n"
             "*Available Commands:*\n"
@@ -295,7 +289,11 @@ async def check_auth_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
             "/residents - List all residents\n"
             "/tasks - List today's tasks\n"
             "/stats - Show quick statistics\n"
+            "/voicenote - Add a voice note for a resident\n"
             "/whoami - Show your user information\n\n"
+            "*Voice Notes:*\n"
+            "• Use /voicenote to add a voice note for a specific resident\n"
+            "• You can also send a voice message directly to get a transcription\n\n"
             "*Natural Language Queries:*\n"
             "You can ask me about tasks, residents, and activities in natural language. For example:\n\n"
             "*Tasks:*\n"
@@ -324,15 +322,14 @@ async def check_auth_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
             "• Also show me activities"
         )
         await query.message.reply_text(help_text, parse_mode="Markdown")
+    elif query.data == "voicenote":
+        await voicenote_start(new_update, context)
     elif query.data == "quick_stats":
         try:
-            from db.connection import DatabaseService
-
-            db = DatabaseService()
-            total_residents = await db.resident_collection.count_documents({})
+            total_residents = await resident_collection.count_documents({})
 
             today_start, today_end = await get_today_date_range()
-            today_tasks = await db.tasks_collection.count_documents(
+            today_tasks = await db_service.task_collection.count_documents(
                 {
                     "$or": [
                         {"start_date": {"$gte": today_start, "$lte": today_end}},
@@ -345,7 +342,7 @@ async def check_auth_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
             )
 
             now = datetime.now()
-            overdue_tasks = await db.tasks_collection.count_documents(
+            overdue_tasks = await db_service.task_collection.count_documents(
                 {"status": "pending", "due_date": {"$lt": now}}
             )
 
@@ -379,13 +376,13 @@ async def check_auth_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
             )
     elif query.data == "overdue_tasks":
         now = datetime.now()
-        await message_handler.handle_task_query(
+        await handle_task_query(
             new_update, {}, {"status": "pending", "due_date": {"$lt": now}}
         )
     elif query.data == "resident_stats":
-        await message_handler.handle_resident_query(new_update, {}, {})
+        await handle_resident_query(new_update, {}, {})
     elif query.data == "task_stats":
-        await message_handler.handle_task_query(new_update, {}, {})
+        await handle_task_query(new_update, {}, {})
 
 
 # Voice Note Command Handlers
@@ -398,7 +395,8 @@ async def voicenote_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     residents = await db_service.get_all_residents(limit=20)
 
     if not residents:
-        await update.message.reply_text("No residents found in the database.")
+        message = update.callback_query.message if update.callback_query else update.message
+        await message.reply_text("No residents found in the database.")
         return ConversationHandler.END
 
     # Create keyboard with resident buttons
@@ -416,9 +414,16 @@ async def voicenote_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard.append([InlineKeyboardButton("Cancel", callback_data="cancel")])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(
-        "Select a resident to add a voice note:", reply_markup=reply_markup
-    )
+    message = update.callback_query.message if update.callback_query else update.message
+    
+    if update.callback_query:
+        await message.edit_text(
+            "Select a resident to add a voice note:", reply_markup=reply_markup
+        )
+    else:
+        await message.reply_text(
+            "Select a resident to add a voice note:", reply_markup=reply_markup
+        )
 
     return SELECTING_RESIDENT
 
@@ -680,7 +685,10 @@ def main():
 
     # Voice note conversation handler
     voice_note_handler = ConversationHandler(
-        entry_points=[CommandHandler("voicenote", voicenote_start)],
+        entry_points=[
+            CommandHandler("voicenote", voicenote_start),
+            CallbackQueryHandler(voicenote_start, pattern="^voicenote$")
+        ],
         states={
             SELECTING_RESIDENT: [CallbackQueryHandler(resident_selected)],
             RECORDING_NOTE: [MessageHandler(filters.VOICE, process_voice_note)],
@@ -696,11 +704,12 @@ def main():
     application.add_handler(CommandHandler("tasks", list_tasks))
     application.add_handler(CommandHandler("stats", show_stats))
 
+    # This needs to be after the voice_note_handler to not interfere with its callbacks
     application.add_handler(CallbackQueryHandler(check_auth_callback))
 
     application.add_handler(
         TelegramMessageHandler(
-            filters.TEXT & ~filters.COMMAND, message_handler.handle_message
+            filters.TEXT & ~filters.COMMAND, handle_message
         )
     )
 
