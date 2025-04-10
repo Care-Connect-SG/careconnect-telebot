@@ -7,6 +7,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
 from reminders_bot.services.activity_service import process_events, fetch_activities
+from reminders_bot.services.task_service import process_task_reminders, fetch_tasks
 from auth.user_auth import restricted
 from utils.config import REMINDERS_BOT_TOKEN
 from reminders_bot.chat_registry import user_chat_map
@@ -32,8 +33,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     await update.message.reply_text(
-        f"Hello {user_name}! I'll send reminders for upcoming events. "
+        f"Hello {user_name}! I'll send reminders for upcoming activities and tasks"
     )
+
 
 async def run_bot():
     """Async function to run the bot with proper event loop management"""
@@ -44,15 +46,25 @@ async def run_bot():
     await application.initialize()
 
     scheduler = AsyncIOScheduler()
+
+    # scheduler.add_job(
+    #     process_events,
+    #     IntervalTrigger(seconds=10),
+    #     id="check_activities",
+    #     name="Check for upcoming activities",
+    # )
+
     scheduler.add_job(
-        process_events,
-        IntervalTrigger(seconds=10),
-        id="check_events",
-        name="Check for upcoming activities",
+        process_task_reminders,
+        IntervalTrigger(seconds=15),
+        id="check_tasks",
+        name="Check for upcoming tasks",
     )
+
     scheduler.start()
 
     await process_events()
+    await process_task_reminders()
 
     await application.start()
 
