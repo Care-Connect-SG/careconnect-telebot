@@ -13,7 +13,7 @@ from telegram.ext import (
 )
 from datetime import datetime
 
-from config import ASSISTANT_BOT_TOKEN, MONGO_URI
+from utils.config import ASSISTANT_BOT_TOKEN, MONGO_URI
 from assistant_bot.handlers import message_handler
 from auth.user_auth import restricted, users_collection
 

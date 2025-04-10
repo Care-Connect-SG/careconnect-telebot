@@ -1,7 +1,7 @@
 import logging
 from motor.motor_asyncio import AsyncIOMotorClient
 
-from config import MONGO_URI, DB_NAME, RESIDENT_DB_NAME
+from utils.config import MONGO_URI, DB_NAME, RESIDENT_DB_NAME
 
 logger = logging.getLogger(__name__)
 
