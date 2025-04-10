@@ -30,7 +30,7 @@ def restricted(func):
                 "Sorry, you are not authorized to use this bot. Please make sure your Telegram username is registered in the system."
             )
             return
-
+        context.user_data["id"] = user["_id"]
         context.user_data["name"] = user["name"]
         context.user_data["email"] = user["email"]
         context.user_data["role"] = user["role"]
