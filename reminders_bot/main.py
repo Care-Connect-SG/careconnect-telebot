@@ -1,7 +1,6 @@
 import asyncio
 import logging
 
-from datetime import datetime, timedelta, timezone
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -36,71 +35,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Hello {user_name}! I'll send reminders for upcoming events. "
     )
 
-
-@restricted
-async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show bot status"""
-    activities = await fetch_activities()
-    now_utc = datetime.now(timezone.utc)
-
-    upcoming = []
-    pending_reminders = []
-
-    for activity in activities:
-        start_time_str = activity["start_time"]
-
-        if "Z" in start_time_str or "+" in start_time_str:
-            start_time = datetime.fromisoformat(start_time_str.replace("Z", "+00:00"))
-        else:
-            start_time = datetime.fromisoformat(start_time_str).replace(
-                tzinfo=timezone.utc
-            )
-
-        if start_time > now_utc:
-            upcoming.append(activity)
-
-            reminder_minutes = activity.get("reminder_minutes")
-            if reminder_minutes is None:
-                reminder_minutes = 5
-
-            reminder_time = start_time - timedelta(minutes=reminder_minutes)
-
-            if now_utc < reminder_time and not activity.get("reminder_sent", False):
-                pending_reminders.append(activity)
-
-    status = (
-        f"🤖 Reminders Bot Status:\n\n"
-        f"Total upcoming activities: {len(activities)}\n"
-        f"Activities within next 2 days: {len(upcoming)}\n"
-        f"Pending reminders: {len(pending_reminders)}\n"
-        f"Next check in: < 10 seconds"
-    )
-
-    await update.message.reply_text(status)
-
-
-@restricted
-async def whoami_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show current user information"""
-    user_info = (
-        f"👤 Your Information:\n\n"
-        f"User ID: {context.user_data.get('id')}\n"
-        f"Name: {context.user_data.get('name')}\n"
-        f"Email: {context.user_data.get('email')}\n"
-        f"Role: {context.user_data.get('role')}\n"
-        f"Telegram Username: @{update.effective_user.username}"
-    )
-
-    await update.message.reply_text(user_info)
-
-
 async def run_bot():
     """Async function to run the bot with proper event loop management"""
     application = Application.builder().token(REMINDERS_BOT_TOKEN).build()
 
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("status", status_command))
-    application.add_handler(CommandHandler("whoami", whoami_command))
 
     await application.initialize()
 
