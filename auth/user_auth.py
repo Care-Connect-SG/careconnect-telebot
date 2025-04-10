@@ -10,10 +10,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-mongo_client = AsyncIOMotorClient(
-    MONGO_URI,
-    tlsAllowInvalidCertificates=True
-)
+mongo_client = AsyncIOMotorClient(MONGO_URI, tlsAllowInvalidCertificates=True)
 db = mongo_client["caregiver"]
 users_collection = db["users"]
 

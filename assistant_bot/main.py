@@ -11,7 +11,7 @@ from telegram.ext import (
     filters,
     CallbackQueryHandler,
 )
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from config import ASSISTANT_BOT_TOKEN, MONGO_URI
 from assistant_bot.handlers import message_handler
@@ -24,15 +24,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-mongo_client = AsyncIOMotorClient(
-    MONGO_URI,
-    tlsAllowInvalidCertificates=True
-)
+mongo_client = AsyncIOMotorClient(MONGO_URI, tlsAllowInvalidCertificates=True)
 resident_db = mongo_client["resident"]
 caregiver_db = mongo_client["caregiver"]
 
 users_collection = caregiver_db["users"]
 resident_collection = resident_db["resident_info"]
+
 
 @restricted
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -142,7 +140,8 @@ async def list_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
 @restricted
 async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        from assistant_bot.services.database import DatabaseService
+        from db.connection import DatabaseService
+
         db = DatabaseService()
         total_residents = await db.resident_collection.count_documents({})
 
@@ -199,14 +198,14 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def check_auth_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    
+
     username = update.effective_user.username
     user = await users_collection.find_one({"telegram_handle": username})
-    
+
     if not user and username:
         clean_username = username.lower().replace("@", "")
         user = await users_collection.find_one({"telegram_handle": clean_username})
-        
+
         if not user:
             user = await users_collection.find_one(
                 {
@@ -218,19 +217,19 @@ async def check_auth_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
                     }
                 }
             )
-    
+
     if not user:
         await query.message.reply_text(
             "Sorry, you are not authorized to use this bot. Please make sure your Telegram username is registered in the system."
         )
         return
-    
+
     context.user_data["name"] = user["name"]
     context.user_data["email"] = user["email"]
     context.user_data["role"] = user["role"]
-    
+
     new_update = Update(update.update_id, message=query.message, callback_query=query)
-    
+
     if query.data == "list_residents":
         await message_handler.list_all_residents(new_update)
     elif query.data == "today_tasks":
@@ -239,7 +238,7 @@ async def check_auth_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
             new_update, {"start_time": today_start, "end_time": today_end}, {}
         )
     elif query.data == "show_help":
-        
+
         help_text = (
             "🤖 *CareConnect Bot Help* 🤖\n\n"
             "*Available Commands:*\n"
@@ -279,7 +278,8 @@ async def check_auth_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         await query.message.reply_text(help_text, parse_mode="Markdown")
     elif query.data == "quick_stats":
         try:
-            from assistant_bot.services.database import DatabaseService
+            from db.connection import DatabaseService
+
             db = DatabaseService()
             total_residents = await db.resident_collection.count_documents({})
 
@@ -311,7 +311,9 @@ async def check_auth_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
 
             keyboard = [
                 [
-                    InlineKeyboardButton("Show Today's Tasks", callback_data="today_tasks"),
+                    InlineKeyboardButton(
+                        "Show Today's Tasks", callback_data="today_tasks"
+                    ),
                     InlineKeyboardButton(
                         "Show Overdue Tasks", callback_data="overdue_tasks"
                     ),
@@ -324,7 +326,9 @@ async def check_auth_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
             )
         except Exception as e:
             logger.error(f"Error showing stats: {str(e)}")
-            await query.message.reply_text("Sorry, I couldn't fetch the statistics right now.")
+            await query.message.reply_text(
+                "Sorry, I couldn't fetch the statistics right now."
+            )
     elif query.data == "overdue_tasks":
         now = datetime.now()
         await message_handler.handle_task_query(

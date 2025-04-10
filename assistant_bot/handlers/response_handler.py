@@ -14,6 +14,7 @@ RESPONSE_TEMPLATES = {
     "resident_not_found": "Sorry, I couldn't find a resident with that name.",
 }
 
+
 def format_task_response(tasks: List[Dict[str, Any]]) -> str:
     if not tasks:
         return RESPONSE_TEMPLATES["no_results"]
@@ -48,6 +49,7 @@ def format_task_response(tasks: List[Dict[str, Any]]) -> str:
 
     return truncate_response(response)
 
+
 def format_activity_response(activities: List[Dict[str, Any]]) -> str:
     if not activities:
         return RESPONSE_TEMPLATES["no_results"]
@@ -77,9 +79,12 @@ def format_activity_response(activities: List[Dict[str, Any]]) -> str:
         )
 
     if len(activities) > 10:
-        response += f"...and {len(activities) - 10} more activities (showing first 10 only)."
+        response += (
+            f"...and {len(activities) - 10} more activities (showing first 10 only)."
+        )
 
     return truncate_response(response)
+
 
 def format_resident_response(resident, tasks, is_general_query=False) -> str:
     if isinstance(resident, list):
@@ -93,7 +98,9 @@ def format_resident_response(resident, tasks, is_general_query=False) -> str:
             response += f"{idx}. *{full_name}* (Room: {room_number})\n\n"
 
         if len(resident) > 10:
-            response += f"...and {len(resident) - 10} more residents (showing first 10 only)."
+            response += (
+                f"...and {len(resident) - 10} more residents (showing first 10 only)."
+            )
 
         return truncate_response(response)
 
@@ -145,6 +152,7 @@ def format_resident_response(resident, tasks, is_general_query=False) -> str:
 
     return truncate_response(response)
 
+
 def format_datetime(dt: datetime) -> str:
     if not dt:
         return "Unknown time"
@@ -154,11 +162,12 @@ def format_datetime(dt: datetime) -> str:
         logger.error(f"Error formatting datetime {dt}: {str(e)}")
         return "Invalid time format"
 
+
 def truncate_response(text: str) -> str:
     if len(text) <= MAX_MESSAGE_LENGTH:
         return text
 
-    truncated_text = text[:MAX_MESSAGE_LENGTH - 100]
+    truncated_text = text[: MAX_MESSAGE_LENGTH - 100]
     last_newline = truncated_text.rfind("\n")
     if last_newline > MAX_MESSAGE_LENGTH - 200:
         truncated_text = truncated_text[:last_newline]

@@ -3,19 +3,20 @@ from typing import Dict, Any
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
-from ..services.database import DatabaseService
+from ..db.connection import DatabaseService
 from .query_handler import parse_query
 from .response_handler import (
     format_task_response,
     format_activity_response,
     format_resident_response,
-    RESPONSE_TEMPLATES
+    RESPONSE_TEMPLATES,
 )
 
 logger = logging.getLogger(__name__)
 
 db = DatabaseService()
 user_context = {}
+
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
@@ -62,9 +63,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         logger.error(f"Error handling message: {str(e)}")
         await update.message.reply_text(RESPONSE_TEMPLATES["error"])
 
+
 def is_follow_up_question(message: str, user_id: int) -> bool:
     follow_up_indicators = ["what about", "how about", "and", "also", "what else"]
     return any(indicator in message for indicator in follow_up_indicators)
+
 
 async def handle_follow_up(update: Update, user_id: int) -> None:
     context = user_context[user_id]
@@ -84,6 +87,7 @@ async def handle_follow_up(update: Update, user_id: int) -> None:
         await handle_activity_query(update, time_range, filters)
     elif context["last_query"] == "resident_query":
         await handle_resident_query(update, time_range, filters)
+
 
 async def handle_task_query(
     update: Update, time_range: Dict[str, Any], filters: Dict[str, Any]
@@ -120,13 +124,19 @@ async def handle_task_query(
         tasks = await db.get_tasks(query_filters)
 
         if not tasks:
-            message = update.callback_query.message if update.callback_query else update.message
-            
-            if filters.get("status") == "pending" and filters.get("due_date", {}).get("$lt"):
+            message = (
+                update.callback_query.message
+                if update.callback_query
+                else update.message
+            )
+
+            if filters.get("status") == "pending" and filters.get("due_date", {}).get(
+                "$lt"
+            ):
                 response = "No overdue tasks found."
             else:
                 response = "No tasks found matching your criteria."
-                
+
             await message.reply_text(response, parse_mode="Markdown")
             return
 
@@ -134,25 +144,36 @@ async def handle_task_query(
 
         keyboard = [
             [
-                InlineKeyboardButton("Show Overdue Tasks", callback_data="overdue_tasks"),
+                InlineKeyboardButton(
+                    "Show Overdue Tasks", callback_data="overdue_tasks"
+                ),
                 InlineKeyboardButton("Show Today's Tasks", callback_data="today_tasks"),
             ]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
-        message = update.callback_query.message if update.callback_query else update.message
-        await message.reply_text(response, parse_mode="Markdown", reply_markup=reply_markup)
+        message = (
+            update.callback_query.message if update.callback_query else update.message
+        )
+        await message.reply_text(
+            response, parse_mode="Markdown", reply_markup=reply_markup
+        )
 
     except Exception as e:
         logger.error(f"Error handling task query: {str(e)}")
-        message = update.callback_query.message if update.callback_query else update.message
+        message = (
+            update.callback_query.message if update.callback_query else update.message
+        )
         await message.reply_text(RESPONSE_TEMPLATES["error"])
+
 
 async def get_task_suggestions(filters: Dict[str, Any]) -> str:
     suggestions = []
 
     if filters.get("priority"):
-        suggestions.append("Try removing the priority filter or checking other priorities.")
+        suggestions.append(
+            "Try removing the priority filter or checking other priorities."
+        )
 
     if filters.get("status"):
         suggestions.append("You might want to check tasks with different statuses.")
@@ -162,8 +183,9 @@ async def get_task_suggestions(filters: Dict[str, Any]) -> str:
 
     if not suggestions:
         return ""
-        
+
     return "Here are some suggestions:\n" + "\n".join(f"• {s}" for s in suggestions)
+
 
 async def handle_activity_query(
     update: Update, time_range: Dict[str, Any], filters: Dict[str, Any]
@@ -198,6 +220,7 @@ async def handle_activity_query(
         logger.error(f"Error handling activity query: {str(e)}")
         await update.message.reply_text(RESPONSE_TEMPLATES["error"])
 
+
 async def handle_resident_query(
     update: Update, time_range: Dict[str, Any], filters: Dict[str, Any]
 ) -> None:
@@ -206,8 +229,14 @@ async def handle_resident_query(
         resident = await db.get_resident_by_name(resident_name)
 
         if not resident:
-            message = update.callback_query.message if update.callback_query else update.message
-            await message.reply_text("No residents found matching your criteria.", parse_mode="Markdown")
+            message = (
+                update.callback_query.message
+                if update.callback_query
+                else update.message
+            )
+            await message.reply_text(
+                "No residents found matching your criteria.", parse_mode="Markdown"
+            )
             return
 
         tasks = []
@@ -218,28 +247,34 @@ async def handle_resident_query(
 
         response = format_resident_response(resident, tasks)
 
-        message = update.callback_query.message if update.callback_query else update.message
+        message = (
+            update.callback_query.message if update.callback_query else update.message
+        )
         await message.reply_text(response, parse_mode="Markdown")
 
     except Exception as e:
         logger.error(f"Error handling resident query: {str(e)}")
-        message = update.callback_query.message if update.callback_query else update.message
+        message = (
+            update.callback_query.message if update.callback_query else update.message
+        )
         await message.reply_text(RESPONSE_TEMPLATES["error"])
+
 
 async def get_resident_suggestions(query: str) -> str:
     suggestions = []
-    
+
     if len(query) < 3:
         suggestions.append("Try using a longer search term.")
     else:
         suggestions.append("Check for spelling errors in the name.")
         suggestions.append("Try searching for the resident's last name only.")
         suggestions.append("Try searching with fewer characters to get more results.")
-    
+
     if not suggestions:
         return ""
-        
+
     return "Here are some suggestions:\n" + "\n".join(f"• {s}" for s in suggestions)
+
 
 async def handle_general_query(update: Update) -> None:
     help_text = (
@@ -254,12 +289,19 @@ async def handle_general_query(update: Update) -> None:
     )
     await update.message.reply_text(help_text)
 
+
 async def list_all_residents(update: Update) -> None:
     try:
-        residents = await db.resident_collection.find({}, {"full_name": 1}).to_list(length=50)
-        
+        residents = await db.resident_collection.find({}, {"full_name": 1}).to_list(
+            length=50
+        )
+
         if not residents:
-            message = update.callback_query.message if update.callback_query else update.message
+            message = (
+                update.callback_query.message
+                if update.callback_query
+                else update.message
+            )
             await message.reply_text("No residents found in the database.")
             return
 
@@ -267,12 +309,18 @@ async def list_all_residents(update: Update) -> None:
         for idx, resident in enumerate(residents, start=1):
             name = resident.get("full_name", "Unnamed")
             response += f"{idx}. {name}\n"
-        
-        message = update.callback_query.message if update.callback_query else update.message
+
+        message = (
+            update.callback_query.message if update.callback_query else update.message
+        )
         await message.reply_text(response)
         logger.info(f"Sent list of {len(residents)} residents")
-        
+
     except Exception as e:
         logger.error(f"Error listing residents: {str(e)}")
-        message = update.callback_query.message if update.callback_query else update.message
-        await message.reply_text("Sorry, I couldn't retrieve the resident list. Please try again later.")
+        message = (
+            update.callback_query.message if update.callback_query else update.message
+        )
+        await message.reply_text(
+            "Sorry, I couldn't retrieve the resident list. Please try again later."
+        )

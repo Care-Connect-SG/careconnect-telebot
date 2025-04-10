@@ -3,13 +3,14 @@ from typing import Dict, Any, List
 from datetime import datetime
 from bson import ObjectId
 
-from .database import db, resident_db
+from ..db.connection import db, resident_db
 
 logger = logging.getLogger(__name__)
 
 tasks_collection = db["tasks"]
 users_collection = db["users"]
 resident_collection = resident_db["resident_info"]
+
 
 async def get_tasks(query=None):
     try:
@@ -54,13 +55,17 @@ async def get_tasks(query=None):
         logger.error(f"Error retrieving tasks: {str(e)}")
         return []
 
-async def get_tasks_by_time_range(start_time: datetime, end_time: datetime) -> List[Dict[str, Any]]:
+
+async def get_tasks_by_time_range(
+    start_time: datetime, end_time: datetime
+) -> List[Dict[str, Any]]:
     try:
         filters = {"start_date": {"$gte": start_time, "$lte": end_time}}
         return await get_tasks(filters)
     except Exception as e:
         logger.error(f"Error getting tasks by time range: {str(e)}")
         return []
+
 
 async def get_tasks_by_status(status: str) -> List[Dict[str, Any]]:
     try:
@@ -69,6 +74,7 @@ async def get_tasks_by_status(status: str) -> List[Dict[str, Any]]:
     except Exception as e:
         logger.error(f"Error getting tasks by status: {str(e)}")
         return []
+
 
 async def get_overdue_tasks() -> List[Dict[str, Any]]:
     try:
@@ -79,12 +85,13 @@ async def get_overdue_tasks() -> List[Dict[str, Any]]:
         logger.error(f"Error getting overdue tasks: {str(e)}")
         return []
 
+
 async def get_today_tasks() -> List[Dict[str, Any]]:
     try:
         now = datetime.now()
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         today_end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
-        
+
         query_filters = {
             "$or": [
                 {"start_date": {"$gte": today_start, "$lte": today_end}},
@@ -94,8 +101,8 @@ async def get_today_tasks() -> List[Dict[str, Any]]:
                 },
             ]
         }
-        
+
         return await get_tasks(query_filters)
     except Exception as e:
         logger.error(f"Error getting today's tasks: {str(e)}")
-        return [] 
+        return []
