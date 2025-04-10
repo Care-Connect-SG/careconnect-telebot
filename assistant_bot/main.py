@@ -21,14 +21,20 @@ from telegram.ext import (
     filters,
     CallbackQueryHandler,
 )
-from utils.config import ASSISTANT_BOT_TOKEN, MONGO_URI, AZURE_SPEECH_KEY, AZURE_SPEECH_ENDPOINT, OPENAI_API_KEY
+from utils.config import (
+    ASSISTANT_BOT_TOKEN,
+    MONGO_URI,
+    AZURE_SPEECH_KEY,
+    AZURE_SPEECH_ENDPOINT,
+    OPENAI_API_KEY,
+)
 import azure.cognitiveservices.speech as speechsdk
 from .services.ai_service import summarize_text
 from .db.connection import DatabaseService
 from auth.user_auth import restricted
 
-os.environ['SSL_CERT_FILE'] = certifi.where()
-os.environ['REQUESTS_CA_BUNDLE'] = certifi.where()
+os.environ["SSL_CERT_FILE"] = certifi.where()
+os.environ["REQUESTS_CA_BUNDLE"] = certifi.where()
 
 ffmpeg_path = r"C:\ffmpeg\bin\ffmpeg.exe"
 os.environ["PATH"] += os.pathsep + os.path.dirname(ffmpeg_path)
@@ -39,14 +45,13 @@ speech_config = speechsdk.SpeechConfig(
 )
 speech_config.speech_recognition_language = "en-US"
 
-logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
+logging.basicConfig(
+    format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO
+)
 logger = logging.getLogger(__name__)
 
 # 🗃️ MongoDB Setup
-mongo_client = AsyncIOMotorClient(
-    MONGO_URI,
-    tlsAllowInvalidCertificates=True
-)
+mongo_client = AsyncIOMotorClient(MONGO_URI, tlsAllowInvalidCertificates=True)
 db = mongo_client["resident"]
 caregiver_db = mongo_client["caregiver"]
 
@@ -56,6 +61,7 @@ db_service = DatabaseService(mongo_client)
 
 # Conversation states
 SELECTING_RESIDENT, RECORDING_NOTE, CONFIRMING_NOTE = range(3)
+
 
 # 🟢 Bot Handlers
 @restricted
@@ -126,6 +132,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.callback_query.message if update.callback_query else update.message
     await message.reply_text(help_text, parse_mode="Markdown")
 
+
 @restricted
 async def whoami_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_info = (
@@ -138,6 +145,7 @@ async def whoami_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(user_info)
 
+
 @restricted
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     help_text = (
@@ -149,6 +157,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/help - Show this help message\n\n"
         "You can also send a voice message directly to transcribe it."
     )
+
 
 async def list_residents(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"User {update.effective_user.id} requested resident list")
@@ -171,8 +180,10 @@ async def list_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update, {"start_time": today_start, "end_time": today_end}, {}
     )
 
+
 async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Sorry, I didn't understand that command.")
+
 
 @restricted
 async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -376,6 +387,7 @@ async def check_auth_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     elif query.data == "task_stats":
         await message_handler.handle_task_query(new_update, {}, {})
 
+
 # Voice Note Command Handlers
 @restricted
 async def voicenote_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -405,11 +417,11 @@ async def voicenote_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(
-        "Select a resident to add a voice note:",
-        reply_markup=reply_markup
+        "Select a resident to add a voice note:", reply_markup=reply_markup
     )
 
     return SELECTING_RESIDENT
+
 
 async def resident_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle resident selection and prompt for voice note"""
@@ -438,6 +450,7 @@ async def resident_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     return RECORDING_NOTE
 
+
 async def process_voice_note(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Process the voice note, transcribe it, generate summary and confirm saving"""
     ogg_path, wav_path = None, None
@@ -459,10 +472,14 @@ async def process_voice_note(update: Update, context: ContextTypes.DEFAULT_TYPE)
             raise FileNotFoundError(f"OGG file not found or empty at {ogg_path}")
 
         logger.info("Converting OGG to WAV using ffmpeg-python...")
-        ffmpeg.input(ogg_path).output(wav_path, ac=1, ar=16000).run(overwrite_output=True)
+        ffmpeg.input(ogg_path).output(wav_path, ac=1, ar=16000).run(
+            overwrite_output=True
+        )
 
-        with wave.open(wav_path, 'rb') as wf:
-            logger.info(f"WAV format: {wf.getnchannels()} channels, {wf.getframerate()} Hz, {wf.getsampwidth()} bytes/sample")
+        with wave.open(wav_path, "rb") as wf:
+            logger.info(
+                f"WAV format: {wf.getnchannels()} channels, {wf.getframerate()} Hz, {wf.getsampwidth()} bytes/sample"
+            )
 
         recognizer = speechsdk.SpeechRecognizer(
             speech_config=speech_config,
@@ -472,12 +489,13 @@ async def process_voice_note(update: Update, context: ContextTypes.DEFAULT_TYPE)
         loop = asyncio.get_running_loop()
         try:
             result = await asyncio.wait_for(
-                loop.run_in_executor(None, recognizer.recognize_once),
-                timeout=15
+                loop.run_in_executor(None, recognizer.recognize_once), timeout=15
             )
         except asyncio.TimeoutError:
             logger.error("Speech recognition timed out.")
-            await update.message.reply_text("⏱️ Speech recognition timed out. Please try again.")
+            await update.message.reply_text(
+                "⏱️ Speech recognition timed out. Please try again."
+            )
             return RECORDING_NOTE
 
         if result.reason == speechsdk.ResultReason.RecognizedSpeech:
@@ -492,7 +510,7 @@ async def process_voice_note(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
             # Format the response with both the transcription and summary
             response = (
-                f"You said: \"{transcribed_text}\"\n\n"
+                f'You said: "{transcribed_text}"\n\n'
                 f"AI Summary: {ai_summary}\n\n"
                 f"Do you want to save this note for {context.user_data['resident_name']}?"
             )
@@ -500,22 +518,30 @@ async def process_voice_note(update: Update, context: ContextTypes.DEFAULT_TYPE)
             # Create confirmation keyboard
             keyboard = [
                 [
-                    InlineKeyboardButton("Save Summary as Note", callback_data="save_summary"),
-                    InlineKeyboardButton("Save Full Transcript", callback_data="save_transcript")
+                    InlineKeyboardButton(
+                        "Save Summary as Note", callback_data="save_summary"
+                    ),
+                    InlineKeyboardButton(
+                        "Save Full Transcript", callback_data="save_transcript"
+                    ),
                 ],
-                [InlineKeyboardButton("Cancel", callback_data="cancel")]
+                [InlineKeyboardButton("Cancel", callback_data="cancel")],
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
 
             await update.message.reply_text(response, reply_markup=reply_markup)
             return CONFIRMING_NOTE
         else:
-            await update.message.reply_text("Sorry, I couldn't understand the audio. Please try again.")
+            await update.message.reply_text(
+                "Sorry, I couldn't understand the audio. Please try again."
+            )
             return RECORDING_NOTE
 
     except Exception as e:
         logger.error(f"Error in process_voice_note: {e}")
-        await update.message.reply_text("Something went wrong while processing your voice note. Please try again.")
+        await update.message.reply_text(
+            "Something went wrong while processing your voice note. Please try again."
+        )
         return RECORDING_NOTE
     finally:
         # Clean up temp files
@@ -524,7 +550,10 @@ async def process_voice_note(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 if path and os.path.exists(path):
                     os.remove(path)
             except PermissionError:
-                logger.warning(f"Could not delete file {path} because it is still in use.")
+                logger.warning(
+                    f"Could not delete file {path} because it is still in use."
+                )
+
 
 async def save_note(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Save the note to the resident's record"""
@@ -552,13 +581,18 @@ async def save_note(update: Update, context: ContextTypes.DEFAULT_TYPE):
     success = await db_service.add_resident_note(resident_id, note_with_timestamp)
 
     if success:
-        await query.message.edit_text(f"✅ Voice note successfully saved for {resident_name}.")
+        await query.message.edit_text(
+            f"✅ Voice note successfully saved for {resident_name}."
+        )
     else:
-        await query.message.edit_text(f"❌ Failed to save note for {resident_name}. Please try again.")
+        await query.message.edit_text(
+            f"❌ Failed to save note for {resident_name}. Please try again."
+        )
 
     # Clear conversation data
     context.user_data.clear()
     return ConversationHandler.END
+
 
 # 🎧 Voice Handler
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -581,10 +615,14 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             raise FileNotFoundError(f"OGG file not found or empty at {ogg_path}")
 
         logger.info("Converting OGG to WAV using ffmpeg-python...")
-        ffmpeg.input(ogg_path).output(wav_path, ac=1, ar=16000).run(overwrite_output=True)
+        ffmpeg.input(ogg_path).output(wav_path, ac=1, ar=16000).run(
+            overwrite_output=True
+        )
 
-        with wave.open(wav_path, 'rb') as wf:
-            logger.info(f"WAV format: {wf.getnchannels()} channels, {wf.getframerate()} Hz, {wf.getsampwidth()} bytes/sample")
+        with wave.open(wav_path, "rb") as wf:
+            logger.info(
+                f"WAV format: {wf.getnchannels()} channels, {wf.getframerate()} Hz, {wf.getsampwidth()} bytes/sample"
+            )
 
         recognizer = speechsdk.SpeechRecognizer(
             speech_config=speech_config,
@@ -594,12 +632,13 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         loop = asyncio.get_running_loop()
         try:
             result = await asyncio.wait_for(
-                loop.run_in_executor(None, recognizer.recognize_once),
-                timeout=15
+                loop.run_in_executor(None, recognizer.recognize_once), timeout=15
             )
         except asyncio.TimeoutError:
             logger.error("Speech recognition timed out.")
-            await update.message.reply_text("⏱️ Speech recognition timed out. Please try again.")
+            await update.message.reply_text(
+                "⏱️ Speech recognition timed out. Please try again."
+            )
             return
 
         if result.reason == speechsdk.ResultReason.RecognizedSpeech:
@@ -609,7 +648,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ai_summary = await summarize_text(transcribed_text)
 
             # Format the response with both the transcription and summary
-            response = f"You said: \"{transcribed_text}\"\n\nAI Summary: {ai_summary}"
+            response = f'You said: "{transcribed_text}"\n\nAI Summary: {ai_summary}'
 
             await update.message.reply_text(response)
         else:
@@ -617,14 +656,18 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as e:
         logger.error(f"Error in handle_voice: {e}")
-        await update.message.reply_text("Something went wrong while processing your voice.")
+        await update.message.reply_text(
+            "Something went wrong while processing your voice."
+        )
     finally:
         for path in [ogg_path, wav_path]:
             try:
                 if path and os.path.exists(path):
                     os.remove(path)
             except PermissionError:
-                logger.warning(f"Could not delete file {path} because it is still in use.")
+                logger.warning(
+                    f"Could not delete file {path} because it is still in use."
+                )
 
 
 def main():
@@ -641,9 +684,9 @@ def main():
         states={
             SELECTING_RESIDENT: [CallbackQueryHandler(resident_selected)],
             RECORDING_NOTE: [MessageHandler(filters.VOICE, process_voice_note)],
-            CONFIRMING_NOTE: [CallbackQueryHandler(save_note)]
+            CONFIRMING_NOTE: [CallbackQueryHandler(save_note)],
         },
-        fallbacks=[CommandHandler("cancel", lambda u, c: ConversationHandler.END)]
+        fallbacks=[CommandHandler("cancel", lambda u, c: ConversationHandler.END)],
     )
     application.add_handler(voice_note_handler)
 
@@ -664,6 +707,7 @@ def main():
     logger.info("Starting Assistant Bot...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
     logger.info("Assistant Bot stopped")
+
 
 if __name__ == "__main__":
     main()
