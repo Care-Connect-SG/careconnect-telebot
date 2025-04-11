@@ -1,20 +1,11 @@
 import logging
-import os
-import certifi
 from openai import AsyncOpenAI
 from utils.config import OPENAI_API_KEY
 
 logger = logging.getLogger(__name__)
 
-# Set SSL certificate path
-os.environ["SSL_CERT_FILE"] = certifi.where()
-os.environ["REQUESTS_CA_BUNDLE"] = certifi.where()
+client = AsyncOpenAI(api_key=OPENAI_API_KEY, http_client=None)
 
-# Initialize the async client
-client = AsyncOpenAI(
-    api_key=OPENAI_API_KEY,
-    http_client=None  # Let the client use default httpx client
-)
 
 async def summarize_text(text):
     """

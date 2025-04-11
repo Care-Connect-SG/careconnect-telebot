@@ -3,12 +3,12 @@ from typing import Dict, Any, List
 from datetime import datetime
 from bson import ObjectId
 
-from ..db.connection import db
+from ..db.connection import (
+    users_collection,
+    activities_collection,
+)
 
 logger = logging.getLogger(__name__)
-
-activities_collection = db["activities"]
-users_collection = db["users"]
 
 
 async def get_activities(

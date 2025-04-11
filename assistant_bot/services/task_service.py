@@ -3,13 +3,13 @@ from typing import Dict, Any, List
 from datetime import datetime
 from bson import ObjectId
 
-from ..db.connection import db, resident_db
+from ..db.connection import (
+    users_collection,
+    tasks_collection,
+    resident_collection,
+)
 
 logger = logging.getLogger(__name__)
-
-tasks_collection = db["tasks"]
-users_collection = db["users"]
-resident_collection = resident_db["resident_info"]
 
 
 async def get_tasks(query=None):

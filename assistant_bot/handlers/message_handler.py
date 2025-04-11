@@ -3,7 +3,7 @@ from typing import Dict, Any
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
-from ..db.connection import DatabaseService
+from ..db.db_service import DatabaseService
 from .query_handler import parse_query
 from .response_handler import (
     format_task_response,
@@ -14,14 +14,14 @@ from .response_handler import (
 
 logger = logging.getLogger(__name__)
 
-# Initialize empty db variable that will be set from main.py
 db = None
+
+user_context = {}
+
 
 def init_handler(database_service: DatabaseService):
     global db
     db = database_service
-
-user_context = {}
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

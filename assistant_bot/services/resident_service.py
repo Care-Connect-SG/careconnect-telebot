@@ -3,13 +3,11 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime
 from bson import ObjectId
 
-from ..db.connection import resident_db, db
+from ..db.connection import (
+    resident_collection,
+)
 
 logger = logging.getLogger(__name__)
-
-resident_collection = resident_db["resident_info"]
-users_collection = db["users"]
-tasks_collection = db["tasks"]
 
 
 async def get_resident_by_name(name: str) -> Optional[Dict[str, Any]]:
