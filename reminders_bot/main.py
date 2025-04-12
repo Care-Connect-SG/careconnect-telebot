@@ -1,16 +1,19 @@
 import asyncio
+from functools import partial
 import logging
 
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.triggers.cron import CronTrigger
 
-from reminders_bot.services.activity_service import process_events, fetch_activities
-from reminders_bot.services.task_service import process_task_reminders, fetch_tasks
+from reminders_bot.services.activity_service import process_events
+from reminders_bot.services.medication_service import schedule_medication_reminders
+from reminders_bot.services.task_service import process_task_reminders
 from auth.user_auth import restricted
 from utils.config import REMINDERS_BOT_TOKEN
-from reminders_bot.chat_registry import user_chat_map
+from reminders_bot.chat_registry import user_chat_map, user_name_map
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
@@ -27,13 +30,33 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     mongo_user_id = context.user_data.get("id")
 
     user_chat_map[mongo_user_id] = chat_id
+    user_name_map[mongo_user_id] = user_name
 
     logger.info(
         f"User {user.id} ({user_name}) started the reminders bot. Chat ID: {chat_id}, MongoDB ID: {mongo_user_id}"
     )
 
     await update.message.reply_text(
-        f"Hello {user_name}! I'll send reminders for upcoming activities and tasks"
+        f"""Hello {user_name} 👋  I’m your personal reminders bot, here to help you stay on top of your activities, tasks, and medications!
+        """
+    )
+
+
+@restricted
+async def refresh(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    scheduler = context.bot_data.get("scheduler")
+
+    if scheduler:
+        for job in scheduler.get_jobs():
+            if job.id.startswith("med_"):
+                scheduler.remove_job(job.id)
+
+    await process_events()
+    await process_task_reminders()
+    await schedule_medication_reminders(scheduler)
+
+    await update.message.reply_text(
+        f"🔃 Updated your activities, tasks and medication reminders! 🔃"
     )
 
 
@@ -42,6 +65,7 @@ async def run_bot():
     application = Application.builder().token(REMINDERS_BOT_TOKEN).build()
 
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("refresh", refresh))
 
     await application.initialize()
 
@@ -61,6 +85,14 @@ async def run_bot():
         name="Check for upcoming tasks",
     )
 
+    scheduler.add_job(
+        partial(schedule_medication_reminders, scheduler),
+        CronTrigger(hour=0, minute=1, timezone="Asia/Singapore"),
+        id="schedule_medications",
+        name="Schedule medication reminders for the day",
+    )
+
+    application.bot_data["scheduler"] = scheduler
     scheduler.start()
 
     await process_events()
