@@ -41,12 +41,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """
     )
 
+
 @restricted
 async def refresh(update: Update, context: ContextTypes.DEFAULT_TYPE):
     scheduler = context.bot_data.get("scheduler")
 
     if scheduler:
-        # Remove only queued medication reminders
         for job in scheduler.get_jobs():
             if job.id.startswith("med_"):
                 scheduler.remove_job(job.id)
@@ -58,8 +58,8 @@ async def refresh(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         f"🔃 Updated your activities, tasks and medication reminders! 🔃"
     )
-    
-  
+
+
 async def run_bot():
     """Async function to run the bot with proper event loop management"""
     application = Application.builder().token(REMINDERS_BOT_TOKEN).build()
