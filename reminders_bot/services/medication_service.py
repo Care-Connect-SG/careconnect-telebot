@@ -197,7 +197,7 @@ async def queue_medication_reminder(resident, medication, chat_id, scheduler):
                 "date",
                 run_date=reminder_time,
                 args=[message, chat_id],
-                id=str(uuid4()) # ensure each job is unique
+                id=f"med_{uuid4()}", # ensure each job is unique
             )
 
     except Exception as e:

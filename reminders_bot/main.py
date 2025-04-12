@@ -43,17 +43,21 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @restricted
 async def refresh(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        f"🔃 Fetching the latest activities, tasks and medication reminders for you 🔃"
-    )
-    scheduler = AsyncIOScheduler()
-    scheduler.remove_all_jobs() # clear away previous scheduled jobs to avoid repeated reminders
+    scheduler = context.bot_data.get("scheduler")
+
+    if scheduler:
+        # Remove only queued medication reminders
+        for job in scheduler.get_jobs():
+            if job.id.startswith("med_"):
+                scheduler.remove_job(job.id)
 
     await process_events()
     await process_task_reminders()
     await schedule_medication_reminders(scheduler)
 
-    scheduler.start()
+    await update.message.reply_text(
+        f"🔃 Updated your activities, tasks and medication reminders! 🔃"
+    )
     
   
 async def run_bot():
@@ -88,6 +92,7 @@ async def run_bot():
         name="Schedule medication reminders for the day",
     )
 
+    application.bot_data["scheduler"] = scheduler
     scheduler.start()
 
     await process_events()
