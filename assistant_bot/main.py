@@ -25,7 +25,6 @@ from utils.config import (
 )
 import azure.cognitiveservices.speech as speechsdk
 from .services.ai_service import summarize_text
-from .db.db_service import DatabaseService
 from .handlers.message_handler import (
     handle_message,
     list_all_residents,
