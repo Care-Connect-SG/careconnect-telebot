@@ -3,7 +3,7 @@ from functools import partial
 import logging
 
 from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.cron import CronTrigger
@@ -11,7 +11,7 @@ from apscheduler.triggers.cron import CronTrigger
 from reminders_bot.services.activity_service import process_events
 from reminders_bot.services.medication_service import schedule_medication_reminders
 from reminders_bot.services.task_service import process_task_reminders
-from reminders_bot.services.fall_service import process_fall_alerts  # 🆕 FALL DETECTION
+from reminders_bot.services.fall_detection_service import process_fall_alerts, handle_fall_response
 from auth.user_auth import restricted
 from utils.config import REMINDERS_BOT_TOKEN
 from reminders_bot.chat_registry import user_chat_map, user_name_map
@@ -68,6 +68,7 @@ async def run_bot():
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("refresh", refresh))
+    application.add_handler(CallbackQueryHandler(handle_fall_response)) 
 
     await application.initialize()
 

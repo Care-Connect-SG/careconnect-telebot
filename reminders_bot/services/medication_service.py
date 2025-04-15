@@ -199,7 +199,7 @@ async def queue_medication_reminder(resident, medication, chat_id, scheduler):
                 res_name = f"👵 Resident: {resident.get('full_name')}"
 
             if medication.get("instructions"):
-                instructions = f"📝 Instructions: {medication.get("instructions")}"
+                instructions = f'📝 Instructions: {medication.get("instructions")}'
 
             message = (
                 title
