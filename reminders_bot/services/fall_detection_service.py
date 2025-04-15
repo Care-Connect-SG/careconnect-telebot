@@ -11,6 +11,7 @@ from reminders_bot.chat_registry import user_chat_map
 logger = logging.getLogger(__name__)
 fallBot = Bot(token=REMINDERS_BOT_TOKEN)
 
+
 async def process_fall_alerts(context=None):
     """Check fall logs and send alerts if they are recent (within 5 mins)"""
     logger.info("Processing fall alerts...")
@@ -32,8 +33,6 @@ async def process_fall_alerts(context=None):
             if timestamp.tzinfo is None:
                 timestamp = timestamp.replace(tzinfo=timezone.utc)
 
-
-            # ✅ Only proceed if timestamp is within last 5 minutes
             if timestamp < five_minutes_ago:
                 continue
 
@@ -41,13 +40,21 @@ async def process_fall_alerts(context=None):
             acceleration = log.get("acceleration_magnitude", 0.0)
 
             for user_id, chat_id in user_chat_map.items():
-                await send_fall_alert(resident_id, status, timestamp, acceleration, chat_id, fall_id=log.get("_id"))
+                await send_fall_alert(
+                    resident_id,
+                    status,
+                    timestamp,
+                    acceleration,
+                    chat_id,
+                    fall_id=log.get("_id"),
+                )
                 sent_count += 1
 
         except Exception as e:
             logger.error(f"Error processing fall log {log.get('_id', 'unknown')}: {e}")
 
     logger.info(f"Sent {sent_count} fall alert(s)")
+
 
 async def fetch_fall_logs():
     """Fetch fall logs"""
@@ -73,7 +80,9 @@ async def fetch_fall_logs():
         return []
 
 
-async def send_fall_alert(resident_id, status, timestamp, acceleration, chat_id, fall_id=None):
+async def send_fall_alert(
+    resident_id, status, timestamp, acceleration, chat_id, fall_id=None
+):
     try:
         formatted_time = timestamp.astimezone().strftime("%Y-%m-%d %H:%M")
         resident_name = await get_resident_name(resident_id)
@@ -87,15 +96,28 @@ async def send_fall_alert(resident_id, status, timestamp, acceleration, chat_id,
         )
 
         if status == "pending" and fall_id:
-            keyboard = InlineKeyboardMarkup([
+            keyboard = InlineKeyboardMarkup(
                 [
-                    InlineKeyboardButton("✅ Confirmed", callback_data=f"confirm|{fall_id}"),
-                    InlineKeyboardButton("🚫 False Alarm", callback_data=f"false|{fall_id}")
+                    [
+                        InlineKeyboardButton(
+                            "✅ Confirmed", callback_data=f"confirm|{fall_id}"
+                        ),
+                        InlineKeyboardButton(
+                            "🚫 False Alarm", callback_data=f"false|{fall_id}"
+                        ),
+                    ]
                 ]
-            ])
-            await fallBot.send_message(chat_id=chat_id, text=message, parse_mode="Markdown", reply_markup=keyboard)
+            )
+            await fallBot.send_message(
+                chat_id=chat_id,
+                text=message,
+                parse_mode="Markdown",
+                reply_markup=keyboard,
+            )
         else:
-            await fallBot.send_message(chat_id=chat_id, text=message, parse_mode="Markdown")
+            await fallBot.send_message(
+                chat_id=chat_id, text=message, parse_mode="Markdown"
+            )
 
         logger.info(f"Sent fall alert to chat {chat_id} for resident {resident_name}")
 
@@ -107,11 +129,15 @@ async def handle_fall_response(update: Update, context: ContextTypes.DEFAULT_TYP
     query = update.callback_query
     await query.answer()
 
-    data = query.data  # e.g., "confirm|<fall_id>" or "false|<fall_id>"
+    data = query.data
     action, fall_id = data.split("|")
 
     new_status = "confirmed" if action == "confirm" else "false_positive"
-    status_text = "✅ Fall was Confirmed" if action == "confirm" else "🚫 Fall was marked as False Alarm"
+    status_text = (
+        "✅ Fall was Confirmed"
+        if action == "confirm"
+        else "🚫 Fall was marked as False Alarm"
+    )
 
     try:
         async with aiohttp.ClientSession() as session:
@@ -132,16 +158,17 @@ async def get_resident_name(resident_id: str) -> str:
     try:
         async with aiohttp.ClientSession() as session:
             url = f"{API_BASE_URL}/residents/{resident_id}"
-            logger.info(f"Fetching resident name from: {url}")  # debug log
+            logger.info(f"Fetching resident name from: {url}")
             async with session.get(url) as response:
                 if response.status == 200:
                     user = await response.json()
-                    logger.info(f"Got resident data: {user}")  # debug log
+                    logger.info(f"Got resident data: {user}")
                     return user.get("full_name", resident_id)
                 else:
-                    logger.warning(f"Resident fetch failed with status {response.status}")
+                    logger.warning(
+                        f"Resident fetch failed with status {response.status}"
+                    )
                     return resident_id
     except Exception as e:
         logger.error(f"Error fetching resident name for {resident_id}: {e}")
         return resident_id
-

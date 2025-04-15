@@ -19,13 +19,9 @@ from telegram.ext import (
     filters,
     CallbackQueryHandler,
 )
-from utils.config import (
-    ASSISTANT_BOT_TOKEN,
-    speech_config,
-)
+from utils.config import ASSISTANT_BOT_TOKEN, speech_config, ffmpeg_path
 import azure.cognitiveservices.speech as speechsdk
 from .services.ai_service import summarize_text
-from .db.db_service import DatabaseService
 from .handlers.message_handler import (
     handle_message,
     list_all_residents,
@@ -551,6 +547,8 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if not os.path.exists(ogg_path) or os.path.getsize(ogg_path) == 0:
             raise FileNotFoundError(f"OGG file not found or empty at {ogg_path}")
+
+        logger.info(f"FFMPEG HERE:{ffmpeg_path}")
 
         logger.info("Converting OGG to WAV using ffmpeg-python...")
         ffmpeg.input(ogg_path).output(wav_path, ac=1, ar=16000).run(

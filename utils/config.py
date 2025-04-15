@@ -21,7 +21,13 @@ AZURE_SPEECH_ENDPOINT = os.getenv("AZURE_SPEECH_ENDPOINT")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 # FFmpeg Configuration
-ffmpeg_path = shutil.which("ffmpeg")
+ffmpeg_path = shutil.which("ffmpeg") or shutil.which("ffmpeg.exe")
+
+if ffmpeg_path is None:
+    os.environ["PATH"] += os.pathsep + r"C:\ffmpeg\bin"
+    ffmpeg_path = shutil.which("ffmpeg") or shutil.which("ffmpeg.exe")
+if ffmpeg_path is None:
+    raise EnvironmentError("FFmpeg is not installed or not found in PATH.")
 
 # Azure Speech Configuration
 speech_config = speechsdk.SpeechConfig(
