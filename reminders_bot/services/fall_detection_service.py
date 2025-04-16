@@ -54,7 +54,7 @@ async def fetch_fall_logs():
     try:
         async with aiohttp.ClientSession() as session:
             now_utc = datetime.now(timezone.utc)
-            start_time = (now_utc - timedelta(minutes=5)).isoformat()
+            start_time = (now_utc - timedelta(minutes=0.1)).isoformat()
 
             url = f"{API_BASE_URL}/fall-detection/logs?start_after={start_time}"
 
