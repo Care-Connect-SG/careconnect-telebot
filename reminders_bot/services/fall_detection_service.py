@@ -101,7 +101,8 @@ async def send_fall_alert(
             f"Resident: *{resident_name}*\n"
             f"Time: `{formatted_time}`\n"
             f"Acceleration: `{acceleration}`\n"
-            f"Status: *{status.capitalize()}*"
+            f"Status: *{status.capitalize()}*\n\n"
+            f"🚑 *Please check on them immediately and ensure their safety.*"
         )
 
         if status == "pending" and fall_id:
