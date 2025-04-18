@@ -11,6 +11,7 @@ from reminders_bot.chat_registry import user_chat_map
 logger = logging.getLogger(__name__)
 fallBot = Bot(token=REMINDERS_BOT_TOKEN)
 
+# Global in-memory tracker
 sent_fall_ids = set()
 
 
@@ -40,7 +41,7 @@ async def process_fall_alerts(context=None):
                 timestamp = timestamp.replace(tzinfo=timezone.utc)
 
             if timestamp < five_seconds_ago:
-                continue
+                continue  # Ignore older logs
 
             resident_id = log.get("resident_id", "unknown")
             acceleration = log.get("acceleration_magnitude", 0.0)
