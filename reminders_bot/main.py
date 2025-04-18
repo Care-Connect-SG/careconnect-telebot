@@ -100,10 +100,10 @@ async def run_bot():
         name="Schedule medication reminders for the day",
     )
 
-    # Fall detection check every 5 minutes
+    # Fall detection check every 5 seconds
     scheduler.add_job(
         process_fall_alerts,
-        IntervalTrigger(seconds=6),
+        IntervalTrigger(seconds=5),
         id="check_falls",
         name="Check recent fall detection logs",
     )
