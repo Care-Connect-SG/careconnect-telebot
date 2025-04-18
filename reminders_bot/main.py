@@ -103,7 +103,7 @@ async def run_bot():
     # Fall detection check every 5 minutes
     scheduler.add_job(
         process_fall_alerts,
-        IntervalTrigger(minutes=5),
+        IntervalTrigger(seconds=6),
         id="check_falls",
         name="Check recent fall detection logs",
     )

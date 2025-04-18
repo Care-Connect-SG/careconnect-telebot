@@ -11,19 +11,26 @@ from reminders_bot.chat_registry import user_chat_map
 logger = logging.getLogger(__name__)
 fallBot = Bot(token=REMINDERS_BOT_TOKEN)
 
+# Global in-memory tracker
+sent_fall_ids = set()
+
 
 async def process_fall_alerts(context=None):
-    """Check fall logs and send alerts if they are recent (within 5 mins)"""
+    """Check fall logs and send alerts if they are recent (within 5 seconds)"""
     logger.info("Processing fall alerts...")
 
     logs = await fetch_fall_logs()
     sent_count = 0
 
     now_utc = datetime.now(timezone.utc)
-    five_minutes_ago = now_utc - timedelta(minutes=5)
+    five_seconds_ago = now_utc - timedelta(seconds=5)
 
     for log in logs:
         try:
+            fall_id = log.get("_id")
+            if fall_id in sent_fall_ids:
+                continue
+
             status = log.get("status")
             if status not in ["pending", "confirmed"]:
                 continue
@@ -33,22 +40,24 @@ async def process_fall_alerts(context=None):
             if timestamp.tzinfo is None:
                 timestamp = timestamp.replace(tzinfo=timezone.utc)
 
-            if timestamp < five_minutes_ago:
-                continue
+            if timestamp < five_seconds_ago:
+                continue  # Ignore older logs
 
             resident_id = log.get("resident_id", "unknown")
             acceleration = log.get("acceleration_magnitude", 0.0)
 
             for user_id, chat_id in user_chat_map.items():
                 await send_fall_alert(
-                    resident_id,
-                    status,
-                    timestamp,
-                    acceleration,
-                    chat_id,
-                    fall_id=log.get("_id"),
+                    resident_id=resident_id,
+                    status=status,
+                    timestamp=timestamp,
+                    acceleration=acceleration,
+                    chat_id=chat_id,
+                    fall_id=fall_id,
                 )
                 sent_count += 1
+
+            sent_fall_ids.add(fall_id)
 
         except Exception as e:
             logger.error(f"Error processing fall log {log.get('_id', 'unknown')}: {e}")
@@ -61,7 +70,7 @@ async def fetch_fall_logs():
     try:
         async with aiohttp.ClientSession() as session:
             now_utc = datetime.now(timezone.utc)
-            start_time = (now_utc - timedelta(minutes=5)).isoformat()
+            start_time = (now_utc - timedelta(seconds=5)).isoformat()
 
             url = f"{API_BASE_URL}/fall-detection/logs?start_after={start_time}"
 
