@@ -11,7 +11,10 @@ from apscheduler.triggers.cron import CronTrigger
 from reminders_bot.services.activity_service import process_events
 from reminders_bot.services.medication_service import schedule_medication_reminders
 from reminders_bot.services.task_service import process_task_reminders
-from reminders_bot.services.fall_detection_service import process_fall_alerts, handle_fall_response
+from reminders_bot.services.fall_detection_service import (
+    process_fall_alerts,
+    handle_fall_response,
+)
 from auth.user_auth import restricted
 from utils.config import REMINDERS_BOT_TOKEN
 from reminders_bot.chat_registry import user_chat_map, user_name_map
@@ -55,8 +58,7 @@ async def refresh(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await process_events()
     await process_task_reminders()
     await schedule_medication_reminders(scheduler)
-    await process_fall_alerts()  # FALL DETECTION: Refresh also triggers fall alerts
-
+    await process_fall_alerts()
     await update.message.reply_text(
         f"🔃 Updated your activities, tasks, medications, and fall alerts! 🔃"
     )
@@ -68,13 +70,13 @@ async def run_bot():
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("refresh", refresh))
-    application.add_handler(CallbackQueryHandler(handle_fall_response)) 
+    application.add_handler(CallbackQueryHandler(handle_fall_response))
 
     await application.initialize()
 
     scheduler = AsyncIOScheduler()
 
-    # Task: Check upcoming activities
+    # Check upcoming activities
     scheduler.add_job(
         process_events,
         IntervalTrigger(seconds=10),
@@ -82,7 +84,7 @@ async def run_bot():
         name="Check for upcoming activities",
     )
 
-    # Task: Check upcoming tasks
+    # Check upcoming tasks
     scheduler.add_job(
         process_task_reminders,
         IntervalTrigger(seconds=15),
@@ -90,7 +92,7 @@ async def run_bot():
         name="Check for upcoming tasks",
     )
 
-    # Task: Schedule meds daily
+    # Schedule meds daily
     scheduler.add_job(
         partial(schedule_medication_reminders, scheduler),
         CronTrigger(hour=0, minute=1, timezone="Asia/Singapore"),
@@ -98,7 +100,7 @@ async def run_bot():
         name="Schedule medication reminders for the day",
     )
 
-    # FALL DETECTION: Check every 5 minutes
+    # Fall detection check every 5 minutes
     scheduler.add_job(
         process_fall_alerts,
         IntervalTrigger(seconds=6),
@@ -109,10 +111,9 @@ async def run_bot():
     application.bot_data["scheduler"] = scheduler
     scheduler.start()
 
-    # Initial run when bot boots up
     await process_events()
     await process_task_reminders()
-    await process_fall_alerts()  # FALL DETECTION
+    await process_fall_alerts()
 
     await application.start()
 
